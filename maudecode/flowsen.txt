@@ -1,0 +1,7 @@
+*** CREOL FUTURE
+fmod FLOWSEN is 
+protecting DATA .
+protecting STORE .
+protecting EVAL .
+
+endfm 

@@ -1,0 +1,24 @@
+fmod SET is protecting INT .sorts MSet NeMSet .
+subsorts Int < NeMSet < MSet .
+
+op empty : -> MSet [ctor] .
+op _;_ : MSet MSet -> MSet [assoc comm id: empty ctor] .
+op _;_ : NeMSet NeMSet -> NeMSet [assoc comm id: empty ctor] .
+
+op size : MSet -> Nat .
+op _in_ : Int MSet -> Bool .
+op delete : Int MSet -> MSet .
+op mult : Int MSet -> Nat . *** multiplicity of an element
+
+
+var S : MSet . vars I J : Int .
+
+eq size(empty) = 0 .
+eq size(S ; I) = 1 + size(S) .
+eq delete(I , I ; S) = S . 
+ceq delete(I, S) = S if not I in S . 
+eq I in S = mult(I, S) > 0 . 
+eq mult(I, I ; S) = 1 + mult(I, S) .
+eq mult(I, J ; S) = mult(I, S) .
+eq mult(I, empty) = 0 .
+endfm

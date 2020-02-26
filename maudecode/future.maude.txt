@@ -1,0 +1,6 @@
+*** CREOL FUTURE
+fmod FUTURE is 
+protecting DATA .
+sort Future .
+op fut(_,_) : Fid Data? -> Future [ctor] .
+endfm 

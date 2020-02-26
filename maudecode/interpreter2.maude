@@ -1,0 +1,1800 @@
+*** Reimplementation of the CREOL interpreter, 2007 ***
+*** Some revisions done 2009  ***
+*** Written by Farzane Karami and Olaf Owe ***
+
+load datatypes
+
+view Aid from TRIV to DATA is
+   sort Elt to Aid .
+endv
+view Data from TRIV to DATA is
+   sort Elt to Data .
+endv
+
+
+*** Bound variables ***
+fmod SUBST is
+*** protecting META-LEVEL .
+protecting DATATYPES .
+***protecting MAP{Aid, Data} * (sort Map{Aid, Data} to Subst,
+***                             op empty : -> Map{Aid, Data} to noSub ) .
+pr STORE .
+
+*** op noSub : -> Subst .
+*** eq noSub = (empty).Subst .
+
+op dom : Aid Subst -> Bool .
+
+*** Non-comm composition operator for substitutions
+op _#_ : Subst Subst -> Subst .
+
+vars A A' : Aid . var D : Data . vars S1 S2  : Subst . var DG : DataG . var DGT : DataGT . var DT : DataTag .
+
+eq S1 # noSub = S1 .
+eq S1 # ((A |-> DGT), S2) = insert(A,DGT,S1) # S2 .
+***eq S1 # ((A |-> DT), S2) = insertTag(A,DT,S1) # S2 .
+
+eq dom(A, noSub) = false .
+eq dom(A, ((A' |-> DGT), S1)) = if A == A' then true else dom(A, S1) fi .
+eq dom(A, S1 # S2) = dom(A, S1) or dom(A, S2) .
+
+***  eq element(E, emp) = false .
+***  eq element(E, E' # L) = if E == E' then true else element(E, L) fi .
+
+*** red insert('var1, str("test"), noSub) .
+*** red insert('var2, int(4), insert('var1, str("test"), noSub)) .
+*** red insert('var2, int(4), insert('var1, str("test"), noSub)) ['var1] .
+*** red upTerm(insert('var1, str("test"), noSub)) .
+*** red downTerm(upTerm(insert('var1, str("test"), noSub)),noSub) .
+*** red downTerm(upTerm(insert('var2, int(4), insert('var1, str("test"), noSub)) ['var1]), null) .
+*** red dom('var1, insert('var2, int(4), insert('var1, str("test"), noSub))) .
+endfm
+
+
+fmod EVAL is
+protecting SUBST . 
+
+*** Evaluation of expressions
+***op eval	    : Expr Subst     -> DataG .     *** evaluate expression
+op eval	    : Expr Subst     -> DataGT .
+***op eval	    : Expr Subst     -> DataFid .
+op evalB    : Expr Subst     -> BoolGT .
+op evalN    : Expr Subst     -> NatGT .
+op evalFid    : Expr Subst     -> Fid .
+op evalS    : Expr Subst     -> StringGT .
+op evalList : ExprList Subst -> DataListGT . *** maps list to values
+
+*** Variables
+var E E' : Expr .     var EL : ExprList .     var D : Data . var DG : DataG . var DFidd : DataFid . 
+var A : Aid .         var S : Subst .         var Q : Qid .
+var I : Int .         var B : Bool .          var STR : String . 
+var DTAG : DataTag .
+var DGT : DataGT .
+ 
+eq eval(A, S) = S [A] .
+***eq eval(DG, S) = DG .                                *** data
+eq eval(DGT, S) = DGT .
+
+eq evalN(E,S) = eval(E,S) asNat .                  *** expressions
+eq evalFid(E,S) = eval(E,S) asFid .                  *** expressions
+eq evalB(E,S) = eval(E,S) asBool .                 *** expressions
+eq evalS(E,S) = eval(E,S) asStr .                  *** expressions
+
+*** standard evaluation of expression
+eq eval(pair(E,E'),S) = pair(eval(E,S),eval(E',S)) . 
+eq eval(list(EL), S)  = list(evalList(EL, S)) .       
+eq eval(setl(EL), S)  = setl(evalList(EL, S)) .   
+eq eval(Q [[EL]], S)  = Q [[ evalList(EL, S) ]] .   
+
+*** lists  
+eq evalList(emp, S)   = emp .
+eq evalList(E,,EL, S) = eval(E, S),, evalList(EL, S) .
+            *** creol function Q defined directly by functions
+ eq evalList(E, S)   = eval(E, S) . *** not needed
+
+endfm
+
+*****flowsensitive eval 
+fmod EVAL-FLOWSENSITIVITY is
+protecting SUBST . 
+protecting STORE . 
+
+*** Evaluation of expressions
+op evalTag     : Expr SubsTag     -> DataTag .     *** evaluate expression
+op evalBTag    : Expr SubsTag     -> BoolTag .
+op evalNTag    : Expr SubsTag     -> NatTag .
+op evalSTag    : Expr SubsTag     -> StrTag .
+op evalListTag : ExprList SubsTag -> DataListTag . *** maps list to values
+
+*** Variables
+var E E' : Expr .     var EL : ExprList .     var D : Data .
+var A : Aid .         var S : SubsTag .         var Q : Qid .
+var I : Int .         var B : Bool .          var STR : String . var TAG : Tag .
+
+***eq evalNTag(E,S) = evalTag(E,S) asNatTag .                  *** expressions
+***eq evalBTag(E,S) = evalTag(E,S) asBoolTag .                 *** expressions
+***eq evalSTag(E,S) = evalTag(E,S) asStrTag .                  *** expressions
+*** standard evaluation of expression
+***later
+***eq evalTag(pair(E,E'),S) = pair(evalTag(E,S),evalTag(E',S)) . 
+***eq evalTag(list(EL), S)  = list(evalListTag(EL, S)) .       
+***eq evalTag(setl(EL), S)  = setl(evalListTag(EL, S)) . 
+***eq evalListTag(emp, S)   = emp .
+***eq evalListTag(E,,EL, S) = evalTag(E, S),, evalListTag(EL, S) .
+           *** creol function Q defined directly by functions
+*** eq evalList(E, S)   = eval(E, S) . *** not needed  
+***eq evalTag(Q [[EL]], S)  = Q [[ evalListTag(EL, S) ]] .   
+
+*** lists  
+
+endfm
+
+
+fmod GUARDS is
+protecting EVAL .
+
+sorts     NoGuard Guard Wait Return PureGuard . 
+subsorts  Return Expr < PureGuard .
+subsorts   NoGuard Wait PureGuard < Guard .
+
+op noGuard : -> NoGuard [ctor] . 
+op wait :    -> Wait [ctor] .           *** suspension
+op _?  : Aid -> Return [ctor] .         *** reply guard
+op _?  : Nat -> Return [ctor] .         *** low level reply guard
+op _?  : Fid -> Return [ctor] .         *** low level reply guard
+op _??  : Fid -> Return [ctor] .
+op _?  : DataGT -> Return [ctor] .
+op _&_ : Guard Guard -> Guard [ctor id: noGuard assoc comm prec 55] .
+op _&_ : PureGuard PureGuard -> PureGuard [ditto] .
+
+*** reduction of guards to normalform: [wait &]? [bool &]? return*
+vars E  E' : Expr . var PG : PureGuard .
+eq   wait & wait = wait .
+eq   PG   & PG   = PG .
+eq   E    & E'   = E and E' .
+
+*** red int(4) & int(5) .
+*** red upTerm(int(4) & int(5)) .
+*** red upTerm(int(4) & int(5) & wait) .
+*** red downTerm(upTerm(int(4) & int(5) & wait), noGuard) .
+*** red 'test ? .
+*** red int(4) add int(5) & 'label ? & wait & bool(true) & wait .
+*** red upTerm(int(4) add int(5) & 'label ? & wait & bool(true) & wait) .
+*** red downTerm(upTerm(int(4) add int(5) & 'label ? & wait & bool(true) & wait), noGuard) .
+endfm
+
+fmod STATEMENTS is
+pr GUARDS .
+***pr WRAPPER .
+
+sorts Mid Cid Stm .             *** Mid = method identifiers
+subsort Qid < Mid Cid .         *** Cid = class identifiers
+
+op _._   : Expr Mid -> Mid [ctor] . *** remote call
+vars E E' : Expr . var Q : Qid . var L : Subst .
+op _@_   : Qid  Cid -> Mid [ctor] . *** method qualified by class name (local)
+*** op _@_   : Aid  Cid -> Aid [ctor] . *** attribute qualified by class name (local)
+
+*** CREOL program syntax
+op skip : -> Stm [ctor] .
+op _::=_  : AidListGT ExprList -> Stm [ctor] .       *** simple assignment
+op _::= new_(_) : Aid Cid ExprList -> Stm [ctor] . *** object creation
+op _::= newLev_(_)_ : Aid Cid ExprList Level -> Stm [ctor] . *** object creation with sec level
+***op _::= safeNew_(_)_ : Aid Cid ExprList Level -> Stm [ctor] .*** wraped object creation
+op _(_;;_) : Mid ExprList AidListGT -> Stm [ctor] .  *** sync. call
+op !_(_)  : Mid ExprList     -> Stm [ctor] .    *** async. call (without label)
+op _!_(_) : Qid Mid ExprList -> Stm [ctor] .       *** async. call (with label)
+op _?(_)  : Qid AidList      -> Stm [ctor] .       *** async. reply statement
+op _?(_)  : Oid AidList      -> Stm [ctor] .       *** async. reply statement
+op _?(_)  : Nat AidList      -> Stm [ctor] .       *** sync reply
+op _?(_)  : Fid AidList      -> Stm [ctor] .       *** sync reply future
+op _??(_)  : Fid AidList      -> Stm [ctor] .       *** wrapped object sync reply future
+op _::= get_ : Aid Fid    -> Stm [ctor] .       *** get operation
+op cont   : Nat              -> Stm [ctor] .       *** sync. scheduling
+op cont   : Fid              -> Stm [ctor] .       *** sync. scheduling future
+op cont   : Oid              -> Stm . **** to wait for object creation with wrapper
+op await_ : Guard            -> Stm [ctor] .       *** guard statements
+op return : ExprList         -> Stm [ctor] .       *** method return
+op free   : AidList          -> Stm [ctor] .       *** deallocation for labels
+op free   : DataG          -> Stm [ctor] .
+op free   : DataFid          -> Stm [ctor] .
+
+*** red 'var ::= int(4) .
+*** red 'var ::= new 'C (int(5) # bool(true)) .
+*** red upTerm('var ::= new 'C (null)) .
+*** red downTerm(upTerm('var ::= new 'C (int(5) # bool(true))), skip) .
+*** red await 'test ? .
+*** red await (('test ?) & wait) .
+*** red downTerm(upTerm(await (('test ?) & wait)), skip) .
+*** red ! 'method (null) .
+*** red cont (5) .
+*** red downTerm(upTerm(cont (5)),skip) .
+*** red downTerm(upTerm('getNeighbor(null ; null)), skip) .
+*** red 'label ! ('oid . 'mtd) (noExpr) .
+*** red downTerm(upTerm('label ! ('oid . 'mtd) (noExpr)), skip) .
+endfm
+
+view Stm from TRIV to STATEMENTS is
+   sort Elt to Stm .
+endv
+
+fmod STM-LIST is
+pr STATEMENTS .                
+protecting LIST{Stm} * (sort List{Stm} to StmList,
+                        sort NeList{Stm} to NeStmList,
+                        op __ : List{Stm} List{Stm} -> List{Stm} to _;_ 
+) .
+
+op endif : -> Stm .
+op if_th_el_fi : Expr StmList StmList -> Stm [ctor] . 
+op if_th_fi    : Expr StmList -> Stm [ctor] . 
+op while_do_od : Expr StmList -> Stm [ctor] .
+op _[]_  : StmList StmList -> Stm [ctor comm assoc] .          *** choice
+op _|||_ : StmList StmList -> Stm [ctor comm assoc] .          *** merge
+op _MERGER_  : StmList StmList -> Stm [assoc] .                *** aux merge
+*** op _;_ :   StmList StmList -> StmList [ctor assoc id: nil] . *** seq. comp.
+
+var SL : StmList .  *** note: SL matches also empty
+var NeSL : NeStmList .
+var EL : ExprList .
+var B : Expr .
+var R : Return .
+var PG : PureGuard .
+
+*** Some simplifications:
+eq await noGuard ; NeSL = NeSL . *** could be SL
+***  eq skip ; SL = SL . *** may affect ||| order 
+eq (nil []  SL)     = SL . 
+eq (nil ||| SL)     = SL . 
+eq (nil MERGER SL)  = SL .
+eq (SL MERGER nil)  = SL .
+eq (emp ::= EL)     = skip . *** Note that skip takes a step
+*** eq (emp ::= EL); SL = SL .  *** could be SL
+
+eq await (wait & PG) = await wait ; await PG .
+*** eq await (R & PG)= await R ; await PG . --- could be rule for confluence!
+
+eq if B th SL fi = if B th SL el nil fi .  *** compiler stuff
+
+*** red ('var ::= int(4)) [] ('var ::= new 'C (null)) .
+*** red downTerm(upTerm(('var ::= int(4)) [] ('var ::= new 'C (null))), skip) .
+*** red (('var ::= int(4)) [] ('var ::= new 'C (null))) ||| skip .
+*** red downTerm(upTerm((('var ::= int(4)) [] ('var ::= new 'C (null))) ||| skip),skip) .
+*** red (('var ::= int(4)) [] ('var ::= new 'C (null))) ||| empty ||| skip .
+*** red downTerm(upTerm((('var ::= int(4)) [] ('var ::= new 'C (null))) ||| emp ||| skip), skip) .
+*** red downTerm(upTerm((('var ::= int(4)) [] ('var ::= new 'C (null))) ||| nil ||| skip), nil) .
+
+sorts Process NeMProc MProc .
+subsort Process < NeMProc < MProc .    *** Multiset of Processes
+op noProc : -> MProc [ctor] .
+op _++_ : NeMProc MProc -> NeMProc [ctor assoc comm id: noProc] .
+op _++_ : MProc NeMProc -> NeMProc [ctor assoc comm id: noProc] .
+op _++_ : MProc MProc   -> MProc   [ctor assoc comm id: noProc] .
+
+*** A Process is a pair of Prog and bound variables ***
+op idle : -> Process [format (!b o)] .  
+op _,_ : Subst StmList -> Process [ctor format (o r nb o)] . 
+var L : Subst .
+eq (L, nil) = idle . *** if 'label is needed this is dangerous!
+**** eq idle = (noSub, nil).  *** may use in right hand sides, but not left.
+
+*** red ((('var ::= int(4)) [] ('var ::= new 'C (null))) ||| skip), insert('var2, int(4), insert('var1, str("test"), noSub)) .
+*** red upTerm(((('var ::= int(4)) [] ('var ::= new 'C (null))) ||| skip), insert('var2, int(4), insert('var1, str("test"), noSub))) .
+*** red downTerm(upTerm(((('var ::= int(4)) [] ('var ::= new 'C (null))) ||| skip), insert('var2, int(4), insert('var1, str("test"), noSub))), idle ) .
+
+*** red (((('var ::= int(4)) [] ('var ::= new 'C (null))) ||| skip), insert('var2, int(4), insert('var1, str("test"), noSub))) ++ idle .
+
+*** red (('var := bool(true)), noSub) .
+endfm
+
+*** CREOL classes ***
+fmod CLASS is
+protecting STM-LIST .
+
+sorts    NSafeClass Class Mtd MMtd Inh InhList . *** inheritance list
+subsorts Inh < Expr .  
+subsorts Inh < InhList .
+*** subsort NSafeClass < Class .
+
+op  _<_> : Cid  ExprList -> Inh .     *** initialised superclass
+op noInh : -> InhList [ctor] .
+op  _##_   : InhList InhList -> InhList [ctor assoc id: noInh] .
+
+var Ih : Inh . 
+var IL : InhList .
+var S : Subst . 
+var SL : StmList . 
+vars Q Q' : Qid . 
+var MM : MMtd .
+var DL : DataListGT .
+var O : Oid .
+var N : Nat .
+var AL : AidListGT .
+var Fut : Fid .
+var Lev : Level .
+
+eq  Ih ## IL ## Ih = Ih ## IL .
+
+op <_: Mtdname | Param:_, Latt:_, Code:_> : 
+    Qid AidListGT Subst StmList -> Mtd [ctor
+      format (g! g o o o g o o g o o g o g o)] .
+
+subsort Mtd < MMtd .    *** Multiset of methods
+
+op noMtd : -> Mtd [ctor] .
+op _*_  : MMtd MMtd -> MMtd [ctor assoc comm id: noMtd format (o o on o)] .
+
+op <_: Cl | Inh:_, Par:_, Att:_, Mtds:_, Ocnt:_> : 
+    Cid InhList AidList Subst MMtd Nat -> Class 
+   [format (b! b o o o b o o  b o o  b o o  b on o  b o  b! on )] .
+
+***unsafe classess with On flowsensitivity 
+op <_: Cl | Inh:_, Par:_, Att:_, Mtds:_, Ocnt:_, Flowsen:_> : 
+    Cid InhList AidList Subst MMtd Nat FlowSen -> NSafeClass 
+   [ctor format (b! b o o o b o o  b o o  b o o  b on o  b o  r o r b! on )] .
+
+op emptyClass : -> Class .
+eq emptyClass = < 'noClass : Cl | Inh: noInh, Par: emp, Att: noSub, Mtds: noMtd, Ocnt: 0 > .
+
+*** Class/method functions ***
+op get : Qid MMtd Oid Fid DataListGT -> Process .  *** fetches pair (code, vars)
+op get : Qid MMtd Oid Nat DataListGT -> Process .  *** fetches pair (code, vars)
+op getGT : Qid MMtd Oid Nat DataList Level -> Process . *** with security tags
+op getGT : Qid MMtd Oid Fid DataList Level -> Process . *** with security tags
+op _in_ : Qid MMtd -> Bool .  *** checks if Q is a declared 
+
+                              *** method in the method multiset
+
+eq Q in noMtd = false .
+eq Q in (< Q' : Mtdname | Param: AL, Latt: S, Code: SL > * MM) = 
+     if (Q == Q') then true else (Q in MM) fi .
+
+*** bind call to process
+eq get(Q, noMtd, O, Fut, DL) = noProc . 
+eq get(Q, < Q' : Mtdname | Param: AL, Latt: S, Code: SL > * MM, O, Fut , DL) = 
+    if Q == Q' 
+    then (insert('caller, O, insert('label, fidData(Fut) , S)), (AL ::= DL) ; SL)
+    else get(Q, MM, O, Fut , DL) fi .
+
+
+
+eq get(Q, noMtd, O, N, DL) = noProc . 
+eq get(Q, < Q' : Mtdname | Param: AL, Latt: S, Code: SL > * MM, O, N, DL) = 
+    if Q == Q' 
+    then (insert('caller, O, insert('label, int(N), S)), (AL ::= DL) ; SL)
+    else get(Q, MM, O, N, DL) fi .
+
+
+****flowsensitivity
+eq getGT(Q, noMtd, O, Fut, DL , Lev) = noProc . 
+eq getGT(Q, < Q' : Mtdname | Param: AL, Latt: S, Code: SL > * MM, O, Fut , DL , Lev) = 
+    if Q == Q' 
+    then (insertTag('callerLevel, Lev, insert('caller, O, insert('label, fidData(Fut) , S))), (AL ::= DL) ; SL)
+    else getGT(Q, MM, O, Fut , DL, Lev) fi .
+
+eq getGT(Q, noMtd, O, N, DL, Lev) = noProc . 
+eq getGT(Q, < Q' : Mtdname | Param: AL, Latt: S, Code: SL > * MM, O, N, DL, Lev) = 
+    if Q == Q' 
+    then (insertTag('callerLevel, Lev, insert('caller, O, insert('label, int(N), S))), (AL ::= DL) ; SL)
+    else getGT(Q, MM, O, N, DL, Lev) fi .
+
+*** insert('caller, O, insert('label, int(N), S))
+*** 'caller |-> O, 'label |-> int(N))
+
+*** red < 'getNeighbor : Mtdname | 
+***           Latt: ('label |-> null, 'caller |-> null, 'n |-> null), Code: skip > .
+
+*** red < 'Butler : Cl | Inh: noInh , Att: noSub , Mtds: noMtd , Ocnt: 0 > .
+*** red ('butler . 'getNeighbor)(emp ; noAid) .
+*** red ('butler ! 'getNeighbor(noExpr)) .
+*** red ('run(noExpr ; noExpr)) # ('run(noExpr ; noExpr)) .
+*** red ('butler ! 'getNeighbor(noExpr)) # ('run(noExpr ; noExpr)) .
+endfm
+
+
+
+*** CREOL objects ***
+fmod OBJECT is
+protecting CLASS .
+
+sorts FlowSenObj Object ObjectLev .
+***subsort FlowSenObj < ObjectLev < Object .
+op <_:_ | Att:_, Pr:_, PrQ:_, Lcnt:_> : 
+       Oid Cid Subst Process MProc Nat -> Object 
+         [ctor format (nr! r o o o  r o r  r o r r o r r o r! no)] .
+op <_:_ | Att:_, Pr:_, PrQ:_, Lcnt:_, Lvl:_> : 
+       Oid Cid Subst Process MProc Nat Level -> ObjectLev 
+         [ctor format (nr! r o o o  r o r  r o r r o r r r r r o r! no)] . ***object with level
+op <_:_ | Att:_, Pr:_, PrQ:_, Lcnt:_, Lvl:_, Flowsen:_, PCstk: _> : 
+       Oid Cid Subst Process MProc Nat Level FlowSen PcStack -> FlowSenObj 
+         [ctor format (nr! r o o o  r o r  r o r r o r r o o o o o o r o o o r! no)] . ***object with level
+
+op noObj : -> Object [ctor] .
+
+*** red < 'object1 : 'class | Att: noSub, Pr: idle, PrQ: noProc, Lcnt: 0 > .
+*** red downTerm(upTerm(< 'object1 : 'class | Att: noSub, Pr: idle, PrQ: idle, Lcnt: 0 >), noObj) .
+
+endfm
+
+*** CREOL messages and queues ***
+fmod COMMUNICATION is
+protecting OBJECT .
+protecting FUTURE .
+
+sort  NatS . *** list of nats and Fids
+subsort Nat < NatS .
+sort Body Msg MMsg Kid Queue .
+subsort Body < MMsg .
+
+op noMsg : -> Body [ctor] .
+op _+_ : MMsg MMsg -> MMsg [ctor assoc comm id: noMsg] . 
+
+*** INVOCATION and REPLY
+op invoc(_,_,_,_) : Oid Nat Mid DataListGT -> Body    *** invocation
+      [ctor format (!r o o o o o o o o o o)] .  
+op invoc(_,_,_,_) : Oid Fid Mid DataListGT -> Body    *** invocation with Futures
+      [ctor format (!r o o o o o o o o o o)] .  
+op comp(_,_) : Nat DataListGT -> Body                 *** completion
+      [ctor format (!r o o o o o o)] .  
+op comp(_,_) : Fid DataListGT -> Body                 *** completion
+      [ctor format (!r o o o o o o)] .  
+op checkinvoc(_,_,_,_) : Oid Fid Mid DataListGT -> Body    *** invocation
+      [ctor format (!r o o o o o o o o o o)] .  
+*******flowsensitivity
+*** INVOCATION and REPLY
+
+***Future
+op _from_to_ : Body Oid Oid -> Msg [ctor format (o ! o ! o on)] .
+op _from_to_ : Body Oid Fid -> Msg [ctor format (o ! o ! o on)] .
+op error(_)   : String -> Msg [ctor format (nnr r o! or onn)] .     *** error 
+op error(_)   : Fid -> Msg [ctor format (nnr r o! or onn)] .     *** error 
+op error(_)   : Mid -> Msg [ctor format (nnr r o! or onn)] .
+op error(_,_,_)   : DataListGT Oid Oid  -> Msg [ctor format (nnr r r r r r  o! or onn)] .
+op warning(_) : String -> Msg [ctor format (nnr! r! r! or onn)] .   *** warning 
+op _from_ : Body Oid  -> Msg [ctor format (o ! o   on)] .
+
+*** Method binding messages
+op bindMtd : Oid Oid Fid Qid DataListGT InhList -> Msg [ctor] . 
+op bindMtd : Oid Oid Nat Qid DataListGT InhList -> Msg [ctor] .
+*** Bind method request
+*** Given: caller callee method params (list of classes to look in)
+op boundMtd(_,_) : Oid Process -> Msg 
+    [ctor format (!r r o o o !r on)] . *** binding result
+*** CONSIDER the call O.Q(I). bindMtd(O,Q,I,C S). Try to find Q in
+*** class C or superclasses, then in S. boundMtd(O,Mt) is the result.
+op newobj   : Oid Cid DataList Level -> Msg .
+op newobjid : Oid Oid -> Msg .
+op getlev   : Oid Oid -> Msg .
+op getlev   : Fid Oid -> Msg .
+op sendlev  : Oid Oid Level -> Msg .
+op sendlev  : Fid Oid Level -> Msg .
+op askfut   : Oid Fid -> Msg .
+op sendfut  : Oid Fid DataList -> Msg .
+op sendfut  : Oid Fid DataListTag -> Msg .
+op isfutresolved : Oid Fid -> Msg .
+op resolvefut : Oid Fid Bool -> Msg .
+op checkActPar : Qid MMtd -> Msg .
+op sendActPar : AidListTag Fid -> Msg .
+op classPar : Mid InhList Fid -> Msg .
+***op checkinvoc : Oid Fid Mid DataListGT -> Msg . 
+op getClass : Mid Fid  -> Msg .
+op getActPar : Aid MMtd Fid -> Msg .
+
+
+*** message queue
+op noDealloc :     -> NatS  [ctor].
+op _;_ : NatS NatS -> NatS [ctor comm assoc id: noDealloc] .
+
+op noQu :          -> Queue [ctor] .
+op <_: Qu | Dealloc:_, Ev:_ > : Oid NatS MMsg -> Queue 
+                          [format (nm! m o o o  m o o m o m! no)] . 
+
+*** red noMsg .
+*** red comp(5, noExpr) .
+*** red invoc('object1, 5, 'method1, noExpr) .
+*** red upTerm(comp(5, noExpr)) .
+*** red downTerm(upTerm(comp(5, noExpr)), noMsg) .
+*** red upTerm(invoc('object1, 5, 'method1, noExpr)) .
+*** red downTerm(upTerm(invoc('object1, 5, 'method1, noExpr)), noMsg) .
+*** red < 'Ob1 : Qu | Dealloc: noDealloc , Ev: noMsg > .
+*** red upTerm(< 'Ob1 : Qu | Dealloc: noDealloc , Ev: noMsg >) .
+*** red downTerm(upTerm(< 'Ob1 : Qu | Dealloc: noDealloc, Ev: noMsg >), noQu) .
+endfm
+
+*** STATE CONFIGURATION ***
+fmod CONFIG is
+protecting DATA .
+including FUTURE .
+***protecting WRAPPER .
+protecting OBJECT .
+protecting COMMUNICATION .
+
+sort Configuration .
+sort Wrapper .
+subsorts  FlowSenObj ObjectLev Future Object Msg Queue Wrapper  NSafeClass Class   < Configuration .
+
+op noConf : -> Configuration [ctor] .
+op __ : Configuration Configuration -> Configuration [ctor assoc comm id: noConf] .
+op << Wr:_, Lvl:_, Lvlqu:_ | _ >> : Oid Level Subst Configuration -> Wrapper [ctor format (nr! r o o o  o o  o o o o r!  no)] .
+op << Wr:_, Lvl:_, Lvlqu:_ | _ >> : Fid Level Subst Configuration -> Wrapper [ctor format (nr! r o o o  o o  o o o o r!  no)] .
+***op << _|_ >> : Fid Level -> Wrapper [ctor] .
+***op << _:_|_ >> : Oid  Wrapper Configuration -> Wrap [ctor] .
+***op << _:_||_ >> : Fid  Wrapper Configuration -> FWrap [ctor] .
+op main : Cid ExprList -> Configuration .
+
+var C : Cid . var E : ExprList .
+eq main(C,E) = < ob('main) : 'class | Att: noSub, 
+                 Pr: (noSub, ('var ::= new C(E))), PrQ: noProc, Lcnt: 0 > 
+               < ob('main) : Qu | Dealloc: noDealloc,Ev: noMsg > .
+
+endfm
+
+
+*** AUXILIARY FUNCTIONS ***
+fmod AUX-FUNCTIONS is
+pr CONFIG .
+protecting CONVERSION .
+
+*** searching for future id
+***op isFid    : Fid Subst -> Bool .
+
+*** Signatures
+op inqueue     : Nat MMsg  -> Bool . *** checks if  Msg is in the queue
+op inqueue  : Fid MMsg  -> Bool . *** checks if  Msg is in the queue
+
+***op checkQ       : Qid   Subst      -> Data .
+***op checkQ       : Qid   Subst      -> DataFid .
+op enabledGuard : Guard   Subst MMsg -> Bool .
+op enabled      : StmList Subst MMsg -> Bool . *** eval guard 
+op ready        : StmList Subst MMsg -> Bool . *** eval guard and reply
+op inlevqu      : Oid Subst          -> Bool .  ****check it the objec level is stored in the wrapper
+
+*** Variables
+vars N N' : Nat .        vars E E' : Expr .       
+var  Q    : Qid .        var  G    : Guard .        var AL : AidListGT .
+var  S    : Subst .      var  PG   : PureGuard .    var DL : DataListGT .
+var  C    : Cid .        var  MM   : MMsg .         vars O O' : Oid . 
+vars Fidd'' Fidd Fidd' : Fid . var M : Msg . var D : Data . var DFid : DataFid .
+var Lev : Level .
+
+***eq checkQ(Q , S) = (eval(Q,S)  ) .
+***eq isFid (Fidd, noSub) = false .
+***eq isFid (fid(O,N),(S,(Fidd' |-> fid(O',N')))) = if ((O == O') and (N == N')) then true else isFid (fid(O,N),S) fi .
+*** Names for new objects 
+
+op newId : Cid Nat -> Oid .
+eq newId(Q, N)  = ob(qid(string(Q) + string(N,10))) .
+
+*** Queue lookup
+eq inlevqu(O, noSub) = false .
+eq inlevqu(O, (S,(O' |-> Lev))) = if (O == O') then true else inlevqu(O, S) fi .
+eq inqueue(N, noMsg) = false .
+eq inqueue(N, comp(N', DL) + MM) = 
+     if N == N' then true else inqueue(N, MM) fi .
+eq inqueue(Fidd, (noMsg)) = false .
+eq inqueue(Fidd, (comp(Fidd', DL) + MM)) = 
+     if Fidd == Fidd' then true else inqueue(Fidd, MM) fi .
+
+
+eq enabledGuard(noGuard, S, MM) = true .
+eq enabledGuard(wait,    S, MM) = false .       *** Note: no wait in PrQ!
+eq enabledGuard(E   & G, S, MM) = outDTag(evalB(E, S)) and enabledGuard(G, S, MM) .
+***eq enabledGuard(Q ? & G, S, MM) = inqueue(evalN(Q,S),MM)and enabledGuard(G,S,MM) .
+eq enabledGuard(Q ? & G, S, MM) = enabledGuard(eval(Q,S), S ,MM)and enabledGuard(G,S,MM) .
+eq enabledGuard(D ?, S, MM) = inqueue(evalN(D,S),MM) .
+eq enabledGuard(DFid ?, S, MM) = inqueue(evalFid(DFid,S),MM) .
+eq enabledGuard(Fidd ?, S, MM) = inqueue(Fidd,MM) .
+eq enabledGuard(Fidd ? & G, S, MM) = inqueue(Fidd, MM) and enabledGuard(G, S, MM) .
+eq enabledGuard(N ? & G, S, MM) = inqueue(N, MM) and enabledGuard(G, S, MM) .
+eq enabledGuard(N ?, S, MM) = inqueue(N, MM) .
+
+*** eq enabledGuard((G1 & G2), S, MM) = enabledGuard(G1, S, MM) and enabledGuard(G2, S, MM) . 
+*** may skip termination problems! due to Id: noguard
+*** red enabledGuard((int(5) > int(7)), noSub, noMsg) .
+*** red int(4) add int(5) .
+*** red (int(4) add int(5)) > (int(7) add int(19)) .
+*** red upTerm((int(4) add int(5)) > (int(7) add int(19))) .
+*** red downTerm(upTerm((int(4) add int(5)) > (int(7) add int(19))), (int(0)).Expr) .
+
+var  ST : Stm . vars SL SL' : StmList .  var  NeSL   : NeStmList .
+
+eq enabled(SL []  SL', S, MM) = enabled(SL, S, MM) or enabled(SL', S, MM) .
+eq enabled(SL ||| SL', S, MM) = enabled(SL, S, MM) or enabled(SL', S, MM) .
+eq enabled(SL MERGER SL',S,MM) = enabled(SL, S, MM) or enabled(SL', S, MM) .
+eq enabled(await G,    S, MM) = enabledGuard(G, S, MM) .
+eq enabled((ST ; NeSL),S, MM) = enabled(ST, S, MM) . 
+eq enabled(ST,         S, MM) = true [owise]. 
+
+eq ready(SL [] SL',    S, MM) = ready(SL, S, MM) or ready(SL', S, MM) .
+eq ready(SL ||| SL',   S, MM) = ready(SL, S, MM) or ready(SL', S, MM) .
+eq ready(SL MERGER SL',S, MM) = ready(SL, S, MM) or ready(SL', S, MM) .
+eq ready(Q ?(AL),      S, MM) = inqueue(eval(Q, S), MM) . 
+eq ready(N ?(AL),      S, MM) = inqueue(N, MM) .
+eq ready(Fidd ?(AL),      S, MM) = inqueue(Fidd, MM) . 
+eq ready((ST ; NeSL),  S, MM) = ready(ST, S, MM) . 
+eq ready(ST,           S, MM) = enabled(ST, S, MM) [owise]. 
+
+op clear : Guard  -> Guard . 
+eq clear(noGuard) = noGuard .
+eq clear(wait)    = noGuard . 
+eq clear(PG)      = PG .
+
+op clear : StmList -> StmList . 
+eq clear(await G)    = await(clear(G)) .
+eq clear(SL []  SL') = clear(SL) [] clear(SL') .
+eq clear(SL ||| SL') = clear(SL) ||| clear(SL') .
+eq clear(SL MERGER SL') = clear(SL) MERGER clear(SL') .
+eq clear(ST ; NeSL)  = clear(ST) ; NeSL .
+eq clear(ST)         = ST [owise] .
+
+endfm
+
+*** THE MACHINE ***
+mod INTERPRETER is
+pr AUX-FUNCTIONS .
+including FUTURE .
+protecting STORE .
+pr EVAL-FLOWSENSITIVITY .
+
+vars O O' : Oid .      vars C C' : Cid .
+vars A A' : AidGT .      var AL : AidListGT .
+vars E E' : Expr .     vars EL  : ExprList .        var DL : DataListGT . var DList : DataList .
+var ST : Stm .         vars SL SL' SL'' : StmList . vars SL1 SL2 : NeStmList .
+var P : Process .
+var W : MProc .
+vars S S' L L' S'' : Subst .
+vars N N' F : Nat .
+vars I I' : InhList .
+var MS MS' : MMtd .
+var NS : NatS .
+var MM : MMsg .
+vars G G' : Guard .
+var M : Mid .
+vars Q Q' : Qid .
+var MsgBody InvocBody : Body .
+vars Fidd' Fidd : Fid .
+var D : DataG .
+var D? : Data? .
+var DFid : DataFid .
+var Lev Lev' : Level .
+var TAG : Tag .
+***var ETAG : ExprTag .
+***Data? .
+var PCSTK PCSTK' : PcStack .
+var Config : Configuration .
+var B : Bool .
+var STR : String .
+
+
+
+*** multiple assignment
+eq < O : C | Att: S, Pr: (L,((A,,A',,AL)::=(E,,E',,EL)); SL), PrQ: W, Lcnt: N, Lvl: Lev >
+=  < O : C | Att: S, Pr: (L,((A ::= eval(E,(S # L))); 
+             (A',, AL ::= evalList(E',,EL,(S # L))); SL)), PrQ: W, Lcnt: N, Lvl: Lev > .
+ 
+*** assignment
+rl [assign] :
+< O : C | Att: S, Pr: (L,((A ::= E); SL)), PrQ: W, Lcnt: N, Lvl: Lev >
+=>
+if dom(A,L) then
+< O : C | Att: S, Pr: (insert(A,eval(E,(S # L)), L), SL), PrQ: W, Lcnt: N, Lvl: Lev > 
+else
+< O : C | Att: insert(A,eval(E,(S # L)), S), Pr: (L, SL), PrQ: W, Lcnt: N, Lvl: Lev > 
+fi .
+
+***flowsensitive assignment
+rl [assign-flowsensitive] :
+< O : C | Att: S, Pr: (L,((A ::= E); SL)), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+=>
+if dom(outDTag(A),L) then
+< O : C | Att: S, Pr: (insertTag(outDTag(A), outDTag(eval(E,(S # L))) addTag(eval(E,(S # L)), outTagPC(PCSTK)), L), SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK > 
+else
+< O : C | Att: insertTag(outDTag(A), outDTag(eval(E,(S # L))) addTag(eval(E,(S # L)), outTagPC(PCSTK)), S), Pr: (L, SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK > 
+fi .
+
+*** skip
+rl [skip-flow-sensitive] :
+  < O : C | Att: S, Pr: (L, skip ; SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+  =>
+  < O : C | Att: S, Pr: (L, SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK > .
+
+rl [skip] :
+  < O : C | Att: S, Pr: (L, skip ; SL), PrQ: W, Lcnt: N, Lvl: Lev >
+  =>
+  < O : C | Att: S, Pr: (L, SL), PrQ: W, Lcnt: N, Lvl: Lev > .
+
+*** if_then_else ***
+rl [if-el] :
+< O : C | Att: S, Pr: (L, if E th SL' el SL'' fi ; SL), PrQ: W, Lcnt: N, Lvl: Lev >
+=>
+if eval(E, (S # L)) asBool then
+< O : C | Att: S, Pr: (L, SL' ; SL), PrQ: W, Lcnt: N, Lvl: Lev >
+else
+< O : C | Att: S, Pr: (L, SL'' ; SL), PrQ: W, Lcnt: N, Lvl: Lev >
+fi .
+
+***crl [if-ending] :
+***< O : C | Att: S, Pr: (L, if E th SL' el SL'' fi ; SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+***=>
+***< O : C | Att: S, Pr: (L, if E th SL' el SL'' fi ; endif ; SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+***if (outTag(eval(E, (S # L))) =/= l) .
+
+rl [if-ending] :
+< O : C | Att: S, Pr: (L, endif ; SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+=>
+< O : C | Att: S, Pr: (L, SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: rest(PCSTK) > .
+
+
+*** if_then_else_flowsensitive ***
+rl [if-el] :
+< O : C | Att: S, Pr: (L, if E th SL' el SL'' fi ; SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+=>
+if outTag(eval(E, (S # L))) =/= l then
+(if outDTag(eval(E, (S # L))) asBool then 
+< O : C | Att: S, Pr: (L, SL' ; endif ; SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK outTag(eval(E, (S # L))) >
+else
+< O : C | Att: S, Pr: (L, SL'' ; endif ; SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK outTag(eval(E, (S # L))) >
+fi)
+else
+(if outDTag(eval(E, (S # L))) asBool then 
+< O : C | Att: S, Pr: (L, SL' ; SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+else
+< O : C | Att: S, Pr: (L, SL'' ; SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+fi)
+fi .
+
+*** while ***
+rl [while] :
+< O : C | Att: S, Pr: (L, while E do SL1 od ; SL2), PrQ: W, Lcnt: N, Lvl: Lev >
+=>
+< O : C | Att: S, 
+          Pr: (L, (if E th (SL1 ; while E do SL1 od) el skip fi); SL2),
+          PrQ: W, Lcnt: N, Lvl: Lev > .
+
+
+*** OBJECT CREATION
+rl [new-object] :
+< O : C | Att: S,Pr: (L, (A ::= new C' (EL)); SL),PrQ: W, Lcnt: N > 
+< C' : Cl | Inh: I , Par: AL, Att: S' , Mtds: MS , Ocnt: F >
+=> 
+< O : C | Att: S, Pr: (L, (A ::= newId(C', F)); SL), PrQ: W, Lcnt: N >
+< C' : Cl | Inh: I , Par: AL, Att: S' , Mtds: MS , Ocnt: (F + 1) >
+< newId(C',F) : C' | Att: noSub, Pr: idle, PrQ: noProc, Lcnt: 1, Lvl: l >
+< newId(C',F) : Qu | Dealloc: noDealloc, Ev: noMsg > 
+findAttr(newId(C',F), I, S', 
+    (AL ::= evalList(EL, (S # L))), ('init (emp ;; emp)) ; ('run (emp ;; emp))) .
+
+rl [new-object] :
+< O : C | Att: S,Pr: (L, (A ::= new C' (EL)); SL),PrQ: W, Lcnt: N, Lvl: Lev > 
+< C' : Cl | Inh: I , Par: AL, Att: S' , Mtds: MS , Ocnt: F >
+=> 
+< O : C | Att: S, Pr: (L, (A ::= newId(C', F)); SL), PrQ: W, Lcnt: N, Lvl: Lev >
+< C' : Cl | Inh: I , Par: AL, Att: S' , Mtds: MS , Ocnt: (F + 1) >
+< newId(C',F) : C' | Att: noSub, Pr: idle, PrQ: noProc, Lcnt: 1, Lvl: l >
+< newId(C',F) : Qu | Dealloc: noDealloc, Ev: noMsg > 
+findAttr(newId(C',F), I, S', 
+    (AL ::= evalList(EL, (S # L))), ('init (emp ;; emp)) ; ('run (emp ;; emp))) .
+
+*** UNSAFE OBJECT CREATION 
+rl [new-unsafe-object] :
+< O : C | Att: S,Pr: (L, (A ::= new C' (EL)); SL),PrQ: W, Lcnt: N > 
+< C' : Cl | Inh: I , Par: AL, Att: S' , Mtds: MS , Ocnt: F,Flowsen: on >
+=> 
+< O : C | Att: S, Pr: (L, (A ::= newId(C', F)); SL), PrQ: W, Lcnt: N >
+< C' : Cl | Inh: I , Par: AL, Att: S' , Mtds: MS , Ocnt: (F + 1), Flowsen: on >
+<< Wr: newId(C',F), Lvl: l, Lvlqu: noSub |  < newId(C',F) : C' | Att: noSub, Pr: idle, PrQ: noProc, Lcnt: 1, Lvl: l, Flowsen: on, PCstk: empPC > 
+< newId(C',F) : Qu | Dealloc: noDealloc, Ev: noMsg > >>
+findAttr(newId(C',F), I, S', 
+    (AL ::= evalList(EL, (S # L))), ('init (emp ;; emp)) ; ('run (emp ;; emp)))  .
+
+rl [new-unsafe-object] :
+< O : C | Att: S,Pr: (L, (A ::= new C' (EL)); SL),PrQ: W, Lcnt: N, Lvl: Lev > 
+< C' : Cl | Inh: I , Par: AL, Att: S' , Mtds: MS , Ocnt: F,Flowsen: on >
+=> 
+< O : C | Att: S, Pr: (L, (A ::= newId(C', F)); SL), PrQ: W, Lcnt: N, Lvl: Lev >
+< C' : Cl | Inh: I , Par: AL, Att: S' , Mtds: MS , Ocnt: (F + 1), Flowsen: on >
+<< Wr: newId(C',F), Lvl: l, Lvlqu: noSub |  < newId(C',F) : C' | Att: noSub, Pr: idle, PrQ: noProc, Lcnt: 1, Lvl: l, Flowsen: on, PCstk: empPC > 
+< newId(C',F) : Qu | Dealloc: noDealloc, Ev: noMsg > >>
+findAttr(newId(C',F), I, S', 
+    (AL ::= evalList(EL, (S # L))), ('init (emp ;; emp)) ; ('run (emp ;; emp)))  .
+
+***UNSAFE OBJECT CREATION with security level
+rl [new-unsafe-object-level] :
+< O : C | Att: S,Pr: (L, (A ::= newLev C' (EL)Lev); SL),PrQ: W, Lcnt: N > 
+< C' : Cl | Inh: I , Par: AL, Att: S' , Mtds: MS , Ocnt: F, Flowsen: on > 
+=> 
+< O : C | Att: S, Pr: (L, (A ::= newId(C', F)); SL), PrQ: W, Lcnt: N >
+< C' : Cl | Inh: I , Par: AL, Att: S' , Mtds: MS , Ocnt: (F + 1), Flowsen: on >
+<< Wr: newId(C',F), Lvl: Lev, Lvlqu: noSub | < newId(C',F) : C' | Att: noSub, Pr: idle, PrQ: noProc, Lcnt: 1, Lvl: Lev, Flowsen: on, PCstk: empPC >
+< newId(C',F) : Qu | Dealloc: noDealloc, Ev: noMsg >  >>
+findAttr(newId(C',F), I, S', (AL ::= evalList(EL, (S # L))), ('init (emp ;; emp)) ; ('run (emp ;; emp))) .
+
+rl [new-unsafe-object-level] :
+< O : C | Att: S,Pr: (L, (A ::= newLev C' (EL)Lev); SL),PrQ: W, Lcnt: N, Lvl: Lev' > 
+< C' : Cl | Inh: I , Par: AL, Att: S' , Mtds: MS , Ocnt: F, Flowsen: on > 
+=> 
+< O : C | Att: S, Pr: (L, (A ::= newId(C', F)); SL), PrQ: W, Lcnt: N, Lvl: Lev' >
+< C' : Cl | Inh: I , Par: AL, Att: S' , Mtds: MS , Ocnt: (F + 1), Flowsen: on >
+<< Wr: newId(C',F), Lvl: Lev, Lvlqu: noSub | < newId(C',F) : C' | Att: noSub, Pr: idle, PrQ: noProc, Lcnt: 1, Lvl: Lev, Flowsen: on, PCstk: empPC >
+< newId(C',F) : Qu | Dealloc: noDealloc, Ev: noMsg >  >>
+findAttr(newId(C',F), I, S', (AL ::= evalList(EL, (S # L))), ('init (emp ;; emp)) ; ('run (emp ;; emp))) .
+
+
+rl [new-object] :
+< O : C | Att: S, Pr: (L, (A ::= new C' (EL)); SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK > 
+=> 
+< O : C | Att: S, Pr: (L, (O ?(A)); SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+newobj(O, C', evalList(EL, (S # L)), l) .
+
+rl [new-object-lev] :
+< O : C | Att: S, Pr: (L, (A ::= newLev C' (EL)Lev); SL), PrQ: W, Lcnt: N, Lvl: Lev', Flowsen: on, PCstk: PCSTK > 
+=> 
+< O : C | Att: S, Pr: (L, (O ?(A)); SL), PrQ: W, Lcnt: N, Lvl: Lev', Flowsen: on, PCstk: PCSTK >
+newobj(O, C', evalList(EL, (S # L)), Lev) .
+
+eq 
+<< Wr: O, Lvl: Lev, Lvlqu: S | Config newobj(O, C', DL, Lev')  >>
+= 
+<< Wr: O, Lvl: Lev, Lvlqu: S | Config >> newobj(O, C', DL, Lev') .
+
+rl [new-object] :
+newobj(O, C', DL, Lev)
+< C' : Cl | Inh: I , Par: AL, Att: S' , Mtds: MS , Ocnt: F >
+=> 
+< C' : Cl | Inh: I , Par: AL, Att: S' , Mtds: MS , Ocnt: (F + 1) >
+< newId(C',F) : C' | Att: noSub, Pr: idle, PrQ: noProc, Lcnt: 1, Lvl: Lev >
+< newId(C',F) : Qu | Dealloc: noDealloc, Ev: noMsg > 
+findAttr(newId(C',F), I, S', 
+    (AL ::= DL), ('init (emp ;; emp)) ; ('run (emp ;; emp)))
+newobjid(O,newId(C',F)) .
+
+rl [new-object] :
+newobj(O, C', DL, Lev)
+< C' : Cl | Inh: I , Par: AL, Att: S' , Mtds: MS , Ocnt: F, Flowsen: on >
+=> 
+< C' : Cl | Inh: I , Par: AL, Att: S' , Mtds: MS , Ocnt: (F + 1), Flowsen: on >
+<< Wr: newId(C',F), Lvl: Lev, Lvlqu: noSub | < newId(C',F) : C' | Att: noSub, Pr: idle, PrQ: noProc, Lcnt: 1, Lvl: Lev, Flowsen: on, PCstk: empPC >
+< newId(C',F) : Qu | Dealloc: noDealloc, Ev: noMsg > >>
+findAttr(newId(C',F), I, S', 
+    (AL ::= DL), ('init (emp ;; emp)) ; ('run (emp ;; emp)))
+newobjid(O,newId(C',F)) .
+
+rl [new-objectmsg-out-wrapper] :
+newobjid(O, O')
+<< Wr: O, Lvl: Lev, Lvlqu: S | Config >>
+=> 
+<< Wr: O, Lvl: Lev, Lvlqu: S | newobjid(O, O') Config >>  .
+
+rl [new-object] :
+newobjid(O, O')
+< O : C | Att: S, Pr: (L, (O ?(A)); SL),PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK > 
+=> 
+< O : C | Att: S, Pr: (L, (A ::= O'); SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK > .
+
+
+
+
+*** ATTRIBUTE inheritance with multiple inheritance
+*** CMC assumes that all attributes names are (globally) different
+op findAttr  : Oid InhList Subst StmList StmList -> Msg [ctor] . *** collect attributes
+op foundAttr : Oid Subst  StmList StmList        -> Msg [ctor] . *** resulting Subst
+*** look in InhList, collect attributes in Subst, give result to Oid
+
+eq findAttr(O, noInh, S, SL, SL')  *** collection completed.
+       = foundAttr(O, S, SL, SL') .
+
+eq findAttr(O,((C < EL >) ## I),S, SL, SL') 
+< C : Cl | Inh: I', Par: AL, Att: L, Mtds: MS, Ocnt: F >
+ = findAttr(O, I ## I',(L # S), SL ; (AL ::= EL), 
+              ('init @ C(emp ;; emp)) ; SL') 
+   < C : Cl | Inh: I', Par: AL, Att: L, Mtds: MS, Ocnt: F > .
+
+eq foundAttr(O, S', SL, SL') 
+< O : C | Att: S, Pr: idle, PrQ: W, Lcnt: N >
+ = < O : C | Att: ('this |-> O, S'), Pr: (noSub, SL ; SL'), PrQ: W, Lcnt: N > .
+
+eq foundAttr(O, S', SL, SL') 
+< O : C | Att: S, Pr: idle, PrQ: W, Lcnt: N, Lvl: Lev >
+ = < O : C | Att: ('this |-> O, S'), Pr: (noSub, SL ; SL'), PrQ: W, Lcnt: N, Lvl: Lev > .
+
+****** flow-sensiivity
+eq foundAttr(O, S', SL, SL') 
+< O : C | Att: S, Pr: idle, PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+ = < O : C | Att: ('this |-> O, S'), Pr: (noSub, SL ; SL'), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK > .
+
+eq foundAttr(O, S', SL, SL') 
+<< Wr: O, Lvl: Lev, Lvlqu: S | Config >>
+ = << Wr: O, Lvl: Lev, Lvlqu: S | foundAttr(O, S', SL, SL') Config >> .
+
+eq boundMtd(O, P) 
+<< Wr: O, Lvl: Lev, Lvlqu: S | Config >>
+ = << Wr: O, Lvl: Lev, Lvlqu: S | boundMtd(O, P) Config >> .
+
+
+*** Non-deterministic choice ***
+*** Choice is comm, so [nondet] considers both SL1 and SL2.
+crl [nondet] :
+< O : C | Att: S, Pr: (L, (SL1 [] SL2); SL), PrQ: W, Lcnt: N >
+< O : Qu | Dealloc: NS, Ev: MM >
+=>
+< O : C | Att: S, Pr: (L, (SL1 ; SL)), PrQ: W, Lcnt: N >
+< O : Qu | Dealloc: NS, Ev: MM >
+if ready(SL1, (S # L), MM) .  
+
+
+*** Merge ***
+*** Merge is comm, so [merge] considers both SL1 and SL2.
+crl [merge] :
+< O : C | Att: S, Pr: (L, (SL1 ||| SL2); SL), PrQ: W, Lcnt: N >  
+< O : Qu | Dealloc: NS, Ev: MM >
+=>
+< O : C | Att: S, Pr: (L, (SL1 MERGER SL2); SL), PrQ: W, Lcnt: N >  
+< O : Qu | Dealloc: NS, Ev: MM >
+if ready(SL1,(S # L), MM) . 
+
+rl [merge-aux] :
+< O : C | Att: S,  Pr:  (L, ((ST ; SL') MERGER SL2); SL), PrQ: W, Lcnt: N >   
+< O : Qu | Dealloc: NS, Ev: MM >
+=>
+< O : Qu | Dealloc: NS, Ev: MM >
+if enabled(ST,(S # L), MM) then
+< O : C | Att: S, Pr: (L, ((ST ; (SL' MERGER SL2)); SL)), PrQ: W, Lcnt: N >   
+else
+< O : C | Att: S, Pr: (L, ((ST ; SL') ||| SL2); SL), PrQ: W, Lcnt: N >   
+fi .
+
+rl [continue2] :
+< O : C | Att: S, Pr: (L, (cont(N) MERGER SL'); SL''), 
+          PrQ: (L', ((N ?(AL)); SL)) ++ W, Lcnt: F >
+=>
+< O : C | Att: S, Pr: (L',((((N ?(AL)) ; SL) MERGER SL'); SL'')), 
+          PrQ: W, Lcnt: F > .
+
+rl [continue2-future] :
+< O : C | Att: S, Pr: (L, (cont(Fidd) MERGER SL'); SL''), 
+          PrQ: (L', ((Fidd ?(AL)); SL)) ++ W, Lcnt: F >
+=>
+< O : C | Att: S, Pr: (L',((((Fidd ?(AL)) ; SL) MERGER SL'); SL'')), 
+          PrQ: W, Lcnt: F > .
+
+
+*** local call 
+ceq boundMtd(O, (L', SL')) 
+< O : C | Att: S,Pr: (L, ((N ?(AL)); SL)),PrQ: W,Lcnt: F, Lvl: Lev >
+= 
+< O : C | Att: S,Pr: (L', SL' ; cont(N)),PrQ: (L,((await N ?) ; (N ?(AL)); SL)) ++ W,
+          Lcnt: F, Lvl: Lev > 
+if (L'['label] == int(N)) .
+
+********flowsensitivity
+*** local call 
+ceq boundMtd(O, (L', SL')) 
+< O : C | Att: S,Pr: (L, ((N ?(AL)); SL)),PrQ: W,Lcnt: F, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+= 
+< O : C | Att: S,Pr: (L', SL' ; cont(N)),PrQ: (L,((await N ?) ; (N ?(AL)); SL)) ++ W,
+          Lcnt: F, Lvl: Lev, Flowsen: on, PCstk: PCSTK > 
+if (L'['label] == int(N)) .
+
+
+
+*** local call within merge
+ceq boundMtd(O, (L', SL')) 
+< O : C | Att: S,Pr: (L,(((N ?(AL)); SL) MERGER SL'')),PrQ: W,Lcnt: F >
+= 
+< O : C | Att: S,Pr: (L', SL'),
+          PrQ: (L, (((await N ?) ; (N ?(AL)); SL) MERGER SL'')) ++ W,Lcnt: F > 
+if (L'['label] == int(N)) .
+
+ceq boundMtd(O, (L', SL')) 
+< O : C | Att: S,Pr: (L,(((Fidd ?(AL)); SL) MERGER SL'')),PrQ: W,Lcnt: F >
+= 
+< O : C | Att: S,Pr: (L', SL'),
+          PrQ: (L, (((await Fidd ?) ; (Fidd ?(AL)); SL) MERGER SL'')) ++ W,Lcnt: F > 
+if (L'['label] == fidData(Fidd)) .
+
+*** Suspension ***
+crl [suspend] :  
+< O : C | Att: S, Pr: (L,SL), PrQ: W, Lcnt: N, Lvl: Lev >
+< O : Qu | Dealloc: NS, Ev: MM >
+=>
+< O : C | Att: S, Pr: idle, PrQ: W ++ (L, SL), Lcnt: N, Lvl: Lev > 
+< O : Qu | Dealloc: NS, Ev: MM >
+if not enabled(SL, (S # L), MM) . 
+
+*******flowsensitivity
+crl [suspend] :  
+< O : C | Att: S, Pr: (L,SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+< O : Qu | Dealloc: NS, Ev: MM >
+=>
+< O : C | Att: S, Pr: idle, PrQ: W ++ (L, SL), Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK > 
+< O : Qu | Dealloc: NS, Ev: MM >
+if not enabled(SL, (S # L), MM) . 
+
+*** Guards ***
+***crl [guard] :
+***< O : C | Att: S, Pr: (L, await G ; SL), PrQ: W, Lcnt: N >
+***< O : Qu | Dealloc: NS, Ev: MM >
+***=>
+***< O : C | Att: S, Pr: (L,SL) , PrQ: W, Lcnt: N >
+***< O : Qu | Dealloc: NS, Ev: MM > 
+***if enabledGuard(G, (S # L), MM) .
+
+rl [guard] :
+< O : C | Att: S, Pr: (L, await(noGuard) ; SL), PrQ: W, Lcnt: N , Lvl: Lev >
+< O : Qu | Dealloc: NS, Ev: MM >
+=>
+< O : C | Att: S, Pr: (L,SL) , PrQ: W, Lcnt: N, Lvl: Lev >
+< O : Qu | Dealloc: NS, Ev: MM >  .
+
+crl [guard] :
+< O : C | Att: S, Pr: (L, await(E) ; SL), PrQ: W, Lcnt: N, Lvl: Lev >
+< O : Qu | Dealloc: NS, Ev: MM >
+=>
+< O : C | Att: S, Pr: (L,SL) , PrQ: W, Lcnt: N, Lvl: Lev >
+< O : Qu | Dealloc: NS, Ev: MM > 
+if enabledGuard(E, (S # L), MM) .
+
+rl [guard] :
+< O : C | Att: S, Pr: (L, await(Q ?) ; SL), PrQ: W, Lcnt: N, Lvl: Lev >
+< O : Qu | Dealloc: NS, Ev: MM >
+=>
+< O : C | Att: S, Pr: (L, await(eval(Q,(S # L)) ?) ; SL) , PrQ: W, Lcnt: N, Lvl: Lev >
+< O : Qu | Dealloc: NS, Ev: MM >  .
+
+crl [guard] :
+< O : C | Att: S, Pr: (L, await(D ?) ; SL), PrQ: W, Lcnt: N, Lvl: Lev >
+< O : Qu | Dealloc: NS, Ev: MM >
+=>
+< O : C | Att: S, Pr: (L,SL) , PrQ: W, Lcnt: N, Lvl: Lev >
+< O : Qu | Dealloc: NS, Ev: MM > 
+if enabledGuard(D, (S # L), MM) .
+
+rl [guard] :
+< O : C | Att: S, Pr: (L, await (DFid ?) ; SL), PrQ: W, Lcnt: N, Lvl: Lev >
+=>
+< O : C | Att: S, Pr: (L, await (evalFid(DFid, (S # L)) ?) ; SL) , PrQ: W, Lcnt: N, Lvl: Lev > .
+
+***< O : Qu | Dealloc: NS, Ev: MM >
+***< O : Qu | Dealloc: NS, Ev: MM  + comp(Fidd', DL) > 
+crl [guardfut] :
+fut( Fidd , DL)
+< O : C | Att: S, Pr: (L, await(Fidd' ?) ; SL), PrQ: W, Lcnt: N, Lvl: Lev >
+=>
+fut(Fidd ,DL)
+< O : C | Att: S, Pr: (L,SL) , PrQ: W, Lcnt: N, Lvl: Lev >
+if ((DL =/= undef) and (Fidd == Fidd')) .
+
+crl [suspend] :  
+fut(Fidd,DL)
+< O : C | Att: S, Pr: (L, await (Fidd ?) ; SL), PrQ: W, Lcnt: N, Lvl: Lev >
+=>
+fut(Fidd,DL)
+< O : C | Att: S, Pr: idle, PrQ: W ++ (L, await (Fidd ?) ; SL), Lcnt: N, Lvl: Lev > 
+if DL == undef . 
+
+***********flowsensitivity
+rl [guard] :
+< O : C | Att: S, Pr: (L, await(noGuard) ; SL), PrQ: W, Lcnt: N , Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+< O : Qu | Dealloc: NS, Ev: MM >
+=>
+< O : C | Att: S, Pr: (L,SL) , PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+< O : Qu | Dealloc: NS, Ev: MM >  .
+
+crl [guard] :
+< O : C | Att: S, Pr: (L, await(E) ; SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+< O : Qu | Dealloc: NS, Ev: MM >
+=>
+< O : C | Att: S, Pr: (L,SL) , PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+< O : Qu | Dealloc: NS, Ev: MM > 
+if (outDTag(enabledGuard(E, (S # L), MM))) .
+
+rl [guard] :
+< O : C | Att: S, Pr: (L, await(Q ?) ; SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+< O : Qu | Dealloc: NS, Ev: MM >
+=>
+< O : C | Att: S, Pr: (L, await(outDTag(eval(Q,(S # L))) ?) ; SL) , PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+< O : Qu | Dealloc: NS, Ev: MM >  .
+
+crl [guard] :
+< O : C | Att: S, Pr: (L, await(D ?) ; SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+< O : Qu | Dealloc: NS, Ev: MM >
+=>
+< O : C | Att: S, Pr: (L,SL) , PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+< O : Qu | Dealloc: NS, Ev: MM > 
+if outDTag(enabledGuard(D, (S # L), MM)) .
+
+rl [guard] :
+< O : C | Att: S, Pr: (L, await (DFid ?) ; SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+=>
+< O : C | Att: S, Pr: (L, await (evalFid(DFid, (S # L)) ?) ; SL) , PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK > .
+
+rl [guardfut-flowsen] :
+< O : C | Att: S, Pr: (L, await(Fidd' ?) ; SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+=>
+< O : C | Att: S, Pr: (L, await(Fidd' ??) ; SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+isfutresolved(O, Fidd') .
+
+rl [guardfut-flowsen-wrapper] :
+<< Wr: O, Lvl: Lev, Lvlqu: S | isfutresolved(O, Fidd') Config >>
+=>
+<< Wr: O, Lvl: Lev, Lvlqu: S | Config >> isfutresolved(O, Fidd') .
+
+rl [isfuture-resolved] :
+fut( Fidd , DL)
+isfutresolved(O, Fidd)
+=>
+if DL =/= undef then
+resolvefut(O, Fidd, true)
+else
+resolvefut(O, Fidd, false) fi .
+
+rl [wrappere-resolved-msg] :
+resolvefut(O, Fidd, B)
+<< Wr: O, Lvl: Lev, Lvlqu: S | Config >>
+=>
+<< Wr: O, Lvl: Lev, Lvlqu: S | resolvefut(O, Fidd, B) Config >> .
+
+rl [unsafeobj-resolved-msg] : 
+resolvefut(O, Fidd, B) 
+< O : C | Att: S, Pr: (L, await(Fidd ??) ; SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+< O : Qu | Dealloc: NS, Ev: MM >
+=>
+if B == true then
+< O : C | Att: S, Pr: (L, await(Fidd ??) ; SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+else
+< O : C | Att: S, Pr: idle, PrQ: W ++ (L, await (Fidd ?) ; SL), Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK > fi .
+ 
+ 
+
+*** GET ***
+rl [get-future] :
+fut(Fidd,D)
+< O : C | Att: S, Pr: (L, (A ::= get Fidd); SL), PrQ: W, Lcnt: N, Lvl: Lev >
+=>
+fut(Fidd,D)
+< O : C | Att: S, Pr: (L, (A ::= D) ; SL) , PrQ: W, Lcnt: N, Lvl: Lev > .
+
+**** [get-undef-future] blocking until resolved
+***eq
+****fut(Fidd,undef)
+***< O : C | Att: S, Pr: (L, (A ::= get Fidd); SL), PrQ: W, Lcnt: N >
+***=
+***fut(Fidd,undef)
+***< O : C | Att: S, Pr: (L, (A ::= get Fidd) ; SL) , PrQ: W, Lcnt: N > .
+
+*** Evaluate guards in suspended processes ***
+
+crl [PrQ-ready] :
+< O : C | Att: S, Pr: idle, PrQ: (L,SL) ++ W, Lcnt: N, Lvl: Lev > 
+< O : Qu | Dealloc: NS, Ev: MM >
+=> 
+< O : C | Att: S, Pr: (L,SL), PrQ: W, Lcnt: N, Lvl: Lev >
+< O : Qu | Dealloc: NS, Ev: MM >
+if ready(SL, (S # L), MM) .
+
+*** Evaluation of wait in PrQ *** 
+
+crl [wait] :  
+    < O : C | Att: S, Pr: idle, PrQ: (L,SL) ++ W, Lcnt: N, Lvl: Lev >  
+=>  < O : C | Att: S, Pr: idle, PrQ: (L,clear(SL))++ W, Lcnt: N, Lvl: Lev > 
+if  clear(SL)=/= SL .
+*** perhaps only if W is not enabled, if desirable to give wait low priority.
+
+*******flowsensitivity
+crl [PrQ-ready] :
+< O : C | Att: S, Pr: idle, PrQ: (L,SL) ++ W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK > 
+< O : Qu | Dealloc: NS, Ev: MM >
+=> 
+< O : C | Att: S, Pr: (L,SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+< O : Qu | Dealloc: NS, Ev: MM >
+if ready(SL, (S # L), MM) .
+
+*** Evaluation of wait in PrQ *** 
+
+crl [wait] :  
+    < O : C | Att: S, Pr: idle, PrQ: (L,SL) ++ W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >  
+=>  < O : C | Att: S, Pr: idle, PrQ: (L,clear(SL))++ W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK > 
+if  clear(SL)=/= SL .
+
+*** Optimization to avoid muiltiple lookups in the message queue for
+*** the same guard
+eq 
+< O : C | Att: S, Pr: P, PrQ: (L, await (N ? & G); SL) ++ W, Lcnt: F, Lvl: Lev > 
+< O : Qu | Dealloc: NS, Ev: MM + comp(N, DL) >  
+=
+< O : C | Att: S,  Pr: P, PrQ: (L, await G ; SL) ++ W, Lcnt: F, Lvl: Lev >    
+< O : Qu | Dealloc: NS, Ev: MM + comp(N, DL) > .
+
+ceq 
+< O : C | Att: S, Pr: P, PrQ: (L, await (Fidd ? & G); SL) ++ W, Lcnt: F, Lvl: Lev > 
+fut(Fidd,DL)  
+=
+< O : C | Att: S,  Pr: P, PrQ: (L, await G ; SL) ++ W, Lcnt: F, Lvl: Lev >    
+fut(Fidd,DL)
+if DL =/= undef .
+
+*********flowsensitivity
+eq 
+< O : C | Att: S, Pr: P, PrQ: (L, await (N ? & G); SL) ++ W, Lcnt: F, Lvl: Lev, Flowsen: on, PCstk: PCSTK > 
+< O : Qu | Dealloc: NS, Ev: MM + comp(N, DL) >  
+=
+< O : C | Att: S,  Pr: P, PrQ: (L, await G ; SL) ++ W, Lcnt: F, Lvl: Lev, Flowsen: on, PCstk: PCSTK >    
+< O : Qu | Dealloc: NS, Ev: MM + comp(N, DL) > .
+
+eq 
+< O : C | Att: S, Pr: P, PrQ: (L, await (Fidd ? & G); SL) ++ W, Lcnt: F, Lvl: Lev, Flowsen: on, PCstk: PCSTK > 
+< O : Qu | Dealloc: NS, Ev: MM + comp((Fidd), DL) >  
+=
+< O : C | Att: S,  Pr: P, PrQ: (L, await G ; SL) ++ W, Lcnt: F, Lvl: Lev, Flowsen: on, PCstk: PCSTK >    
+< O : Qu | Dealloc: NS, Ev: MM + comp((Fidd), DL) > .
+
+*** METHOD CALLS ***
+
+
+*** receive invocation message ***
+rl [receive-call-req] :
+< O : C | Att: S, Pr: P, PrQ: W, Lcnt: N, Lvl: Lev >
+< O : Qu | Dealloc: NS, Ev: MM + invoc(O', F, Q, DL) >
+=>
+< O : C | Att: S, Pr: P, PrQ: W, Lcnt: N, Lvl: Lev >
+< O : Qu | Dealloc: NS, Ev: MM > bindMtd(O, O', F, Q, DL, C < emp >) .
+
+rl [receive-call-req-future] :
+< O : C | Att: S, Pr: P, PrQ: W, Lcnt: N, Lvl: Lev >
+< O : Qu | Dealloc: NS, Ev: MM + invoc(O', Fidd, Q, DL) >
+=>
+< O : C | Att: S, Pr: P, PrQ: W, Lcnt: N, Lvl: Lev >
+< O : Qu | Dealloc: NS, Ev: MM > bindMtd(O, O', Fidd, Q, DL, C < emp >) .
+
+*********flowsensitivity
+rl [receive-call-req] :
+< O : C | Att: S, Pr: P, PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+< O : Qu | Dealloc: NS, Ev: MM + invoc(O', F, Q, DL) >
+=>
+< O : C | Att: S, Pr: P, PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+< O : Qu | Dealloc: NS, Ev: MM > bindMtd(O, O', F, Q, DL, C < emp >) .
+
+rl [receive-call-req-future] :
+< O : C | Att: S, Pr: P, PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+< O : Qu | Dealloc: NS, Ev: MM + invoc(O', Fidd, Q, DL) > 
+=>
+< O : C | Att: S, Pr: P, PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+< O : Qu | Dealloc: NS, Ev: MM > bindMtd(O, O', Fidd, Q, DL, C < emp >) .
+
+rl [invoc-out-wrapper-nat] :
+<< Wr: O, Lvl: Lev, Lvlqu: S | bindMtd(O, O', F, Q, DL, C < emp >) Config >>
+=>
+<< Wr: O, Lvl: Lev, Lvlqu: S | Config >> bindMtd(O, O', F, Q, DL, C < emp >) .
+
+rl [invoc-out-wrapper] :
+<< Wr: O, Lvl: Lev, Lvlqu: S | bindMtd(O, O', Fidd, Q, DL, C < emp >) Config >>
+=>
+<< Wr: O, Lvl: Lev, Lvlqu: S | Config >> bindMtd(O, O', Fidd, Q, DL, C < emp >) .
+
+*** Method binding with multiple inheritance
+*** Method binding with multiple inheritance
+ceq bindMtd(O, O',N,Q, DL,noInh) = 
+boundMtd(O,(('caller |-> O', 'label |-> int(N)), return(emp)))
+if Q == 'run .
+
+
+eq bindMtd(O, O', N, Q, DL,(C < EL >)## I') 
+< C : Cl | Inh: I , Par: AL, Att: S , Mtds: MS , Ocnt: F >
+   =  if (Q in MS) then boundMtd(O,get(Q,MS,O', N, DL)) 
+                   else bindMtd(O,O',N,Q, DL, I ## I') fi 
+< C : Cl | Inh: I , Par: AL, Att: S , Mtds: MS , Ocnt: F > .
+******actual parameter checker
+eq classPar( Q, (C < EL >)## I', Fidd) 
+< C : Cl | Inh: I , Par: AL, Att: S , Mtds: MS , Ocnt: F >
+   =  if (Q in MS) then getActPar(Q, MS, Fidd) 
+                   else classPar(Q, I ## I', Fidd) fi 
+< C : Cl | Inh: I , Par: AL, Att: S , Mtds: MS , Ocnt: F > .
+
+
+eq getActPar(Q, < Q' : Mtdname | Param: AL, Latt: S, Code: SL > * MS', Fidd)
+ = 
+    if Q == Q' 
+    then sendActPar(AL, Fidd)
+    else getActPar(Q, MS', Fidd) fi .
+
+******actual parameter checker
+eq classPar(Q, (C < EL >)## I', Fidd) 
+< C : Cl | Inh: I , Par: AL, Att: S , Mtds: MS , Ocnt: F, Flowsen: on >
+   =  if (Q in MS) then getActPar(Q, MS, Fidd) 
+                   else classPar(Q, I ## I', Fidd) fi 
+< C : Cl | Inh: I , Par: AL, Att: S , Mtds: MS , Ocnt: F, Flowsen: on > .
+
+******flowsensitivity
+eq bindMtd(O, O', N, Q, DL,(C < EL >)## I') 
+< C : Cl | Inh: I , Par: AL, Att: S , Mtds: MS , Ocnt: F, Flowsen: on >
+   =  if (Q in MS) then boundMtd(O,get(Q,MS,O', N, DL)) 
+                   else bindMtd(O,O',N,Q, DL, I ## I') fi 
+< C : Cl | Inh: I , Par: AL, Att: S , Mtds: MS , Ocnt: F, Flowsen: on > .
+
+
+rl [receive-call-req] :
+< O : Qu | Dealloc: NS, Ev: MM + invoc(O', N, Q @ C, DL) >
+=> < O : Qu | Dealloc: NS, Ev: MM >  bindMtd(O, O', N, Q, DL, C < emp >) .
+
+***ceq bindMtd(O, O',Fidd,Q, DL,noInh) = 
+***boundMtd(O,(('caller |-> O', 'label |-> Fidd), return(emp)))
+***if Q == 'run .
+
+eq bindMtd(O, O', Fidd, Q, DL,(C < EL >)## I') 
+< C : Cl | Inh: I , Par: AL, Att: S , Mtds: MS , Ocnt: F >
+   =  if (Q in MS) then boundMtd(O,get(Q,MS,O', Fidd, DL)) 
+                   else bindMtd(O,O',Fidd,Q, DL, I ## I') fi 
+< C : Cl | Inh: I , Par: AL, Att: S , Mtds: MS , Ocnt: F > .
+
+******flowsensitivity
+eq bindMtd(O, O', Fidd, Q, DL,(C < EL >)## I') 
+< C : Cl | Inh: I , Par: AL, Att: S , Mtds: MS , Ocnt: F, Flowsen: on >
+   =  if (Q in MS) then boundMtd(O,get(Q,MS,O', Fidd, DL)) 
+                   else bindMtd(O,O',Fidd,Q, DL, I ## I') fi 
+< C : Cl | Inh: I , Par: AL, Att: S , Mtds: MS , Ocnt: F, Flowsen: on > .
+
+***rl [receive-call-req] :
+***< O : Qu | Dealloc: NS, Ev: MM + invoc(O', Fidd, Q @ C, DL) >
+***=> < O : Qu | Dealloc: NS, Ev: MM >  bindMtd(O, O', Fidd, Q, DL, C < emp >) .
+
+rl [receive-call-bound] : 
+boundMtd(O, P) < O : C | Att: S, Pr: idle, PrQ: W, Lcnt: N, Lvl: Lev >
+=> < O : C | Att: S, Pr: idle, PrQ: W ++ P, Lcnt: N, Lvl: Lev > .
+
+*****flowsensitivity
+rl [receive-call-bound] : 
+boundMtd(O, P) < O : C | Att: S, Pr: idle, PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+=> < O : C | Att: S, Pr: idle, PrQ: W ++ P, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK > .
+
+rl [continue] :
+< O : C | Att: S, Pr: (L,cont(N)), PrQ: (L',((N ?(AL)); SL)) ++ W, Lcnt: F, Lvl: Lev >
+=>
+< O : C | Att: S, Pr: (L',((N ?(AL)); SL)), PrQ: W, Lcnt: F, Lvl: Lev > .
+
+rl [continue-future] :
+< O : C | Att: S, Pr: (L,cont(Fidd)), PrQ: (L',((Fidd ?(AL)); SL)) ++ W, Lcnt: F, Lvl: Lev >
+=>
+< O : C | Att: S, Pr: (L',((Fidd ?(AL)); SL)), PrQ: W, Lcnt: F, Lvl: Lev > .
+
+rl [local-async-qualified-req] :
+< O : C | Att: S, Pr: (L, ( ! Q @ C'(EL)); SL),PrQ: W, Lcnt: N, Lvl: Lev >
+=> 
+< O : C | Att: S, Pr: (L, SL), PrQ: W, Lcnt: N + 1, Lvl: Lev >
+invoc(O, N, Q @ C', evalList(EL, (S # L))) from O to O .
+
+******flowsensitivity
+rl [continue] :
+< O : C | Att: S, Pr: (L,cont(N)), PrQ: (L',((N ?(AL)); SL)) ++ W, Lcnt: F, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+=>
+< O : C | Att: S, Pr: (L',((N ?(AL)); SL)), PrQ: W, Lcnt: F, Lvl: Lev, Flowsen: on, PCstk: PCSTK > .
+
+rl [continue-future] :
+< O : C | Att: S, Pr: (L,cont(Fidd)), PrQ: (L',((Fidd ?(AL)); SL)) ++ W, Lcnt: F, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+=>
+< O : C | Att: S, Pr: (L',((Fidd ?(AL)); SL)), PrQ: W, Lcnt: F, Lvl: Lev, Flowsen: on, PCstk: PCSTK > .
+
+rl [local-async-qualified-req] :
+< O : C | Att: S, Pr: (L, ( ! Q @ C'(EL)); SL),PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+=> 
+< O : C | Att: S, Pr: (L, SL), PrQ: W, Lcnt: N + 1, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+invoc(O, N, Q @ C', evalList(EL, (S # L))) from O to O .
+
+eq  Q' ! Q(EL) =   Q' ! 'this . Q(EL) . *** could alternatively use X@ this class
+
+*** REMOTE METHOD CALLS ***/////Future??
+
+
+
+ceq < O : C | Att: S, Pr: (L, (Q ! E . Q'(EL)); SL), PrQ: W, Lcnt: N, Lvl: Lev >
+=  < O : C | Att: S,
+Pr: (L, (Q ::= int(N)); (! (eval(E, (S # L))) . Q' (EL));  SL), PrQ: W,  Lcnt: N, Lvl: Lev >
+ if ((eval(E, (S # L)) == O) or (eval(E, (S # L)) == 'this ) )  .
+
+
+ceq < O : C | Att: S, Pr: (L, (Q ! E . Q'(EL)); SL), PrQ: W, Lcnt: N, Lvl: Lev >
+= < O : C | Att: S,
+Pr: (L, (Q ::= fidData(fid(O,N))); (! E . Q'(EL));  SL), PrQ: W,  Lcnt: N, Lvl: Lev >
+ if ((eval(E, (S # L)) =/= O) or (eval(E, (S # L)) =/= 'this ) )  .
+
+
+
+rl [remote-async-reply] : 
+< O : C | Att: S, Pr: (L, ( ! E . M(EL)); SL), PrQ: W, Lcnt: N, Lvl: Lev >
+=>
+if ((eval(E, (S # L)) == O) or (eval(E, (S # L)) == 'this) ) then
+< O : C | Att: S, Pr: (L,SL), PrQ: W, Lcnt: N + 1, Lvl: Lev >
+invoc(O, N , M , evalList(EL, (S # L))) from O to O
+ else 
+fut( fid ( O , N ) , undef )
+< O : C | Att: S, Pr: (L,SL), PrQ: W, Lcnt: N + 1, Lvl: Lev >
+invoc(O, fid (O,N) , M , evalList(EL, (S # L))) from O to eval(E, (S # L)) 
+  fi .
+
+
+
+*** Reduce sync. call  to async. call with reply 
+
+eq
+ < O : C | Att: S, Pr: (L, (E . M(EL ;; AL)); SL), PrQ: W, Lcnt: N, Lvl: Lev >
+= 
+if eval(E, (S # L)) =/= O then
+ < O : C | Att: S, Pr: (L, (! E . M(EL)); (fid(O,N) ?(AL)); SL), PrQ: W,  Lcnt: N, Lvl: Lev > 
+else
+< O : C | Att: S, Pr: (L, (! E . M(EL)); (N ?(AL)); SL), PrQ: W,  Lcnt: N, Lvl: Lev >  fi .
+
+***eq 'this . Q(EL) = Q(EL) .
+
+eq
+< O : C | Att: S, Pr: (L, (Q(EL ;; AL)); SL), PrQ: W, Lcnt: N, Lvl: Lev >
+= 
+  < O : C | Att: S, Pr: (L, (! 'this . Q(EL)); (N ?(AL)); SL), PrQ: W,  Lcnt: N, Lvl: Lev >   .
+
+eq
+ < O : C | Att: S, Pr: (L,(Q @ C(EL ;; AL) ); SL), PrQ: W, Lcnt: N, Lvl: Lev >
+= 
+   < O : C | Att: S, Pr: (L, (! Q @ C(EL)); (N ?(AL)); SL), PrQ: W,  Lcnt: N, Lvl: Lev >   .
+
+****** flowsensitivity
+ceq < O : C | Att: S, Pr: (L, (Q ! E . Q'(EL)); SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+=  < O : C | Att: S,
+Pr: (L, (Q ::= int(N)); (! (eval(E, (S # L))) . Q' (EL));  SL), PrQ: W,  Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+ if ((eval(E, (S # L)) == O) or (eval(E, (S # L)) == 'this ) )  .
+
+
+ceq < O : C | Att: S, Pr: (L, (Q ! E . Q'(EL)); SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+= < O : C | Att: S,
+Pr: (L, (Q ::= fidData(fid(O,N))); (! E . Q'(EL));  SL), PrQ: W,  Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+ if ((eval(E, (S # L)) =/= O) or (eval(E, (S # L)) =/= 'this ) )  .
+
+
+rl [remote-async-reply] : 
+< O : C | Att: S, Pr: (L, ( ! E . M(EL)); SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+=>
+if ((eval(E, (S # L)) == O) or (eval(E, (S # L)) == 'this) ) then
+< O : C | Att: S, Pr: (L,SL), PrQ: W, Lcnt: N + 1, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+invoc(O, N , M , evalList(EL, (S # L))) from O to O
+ else 
+fut( fid ( O , N ) , undef )
+< O : C | Att: S, Pr: (L,SL), PrQ: W, Lcnt: N + 1, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+invoc(O, fid (O,N) , M , evalList(EL, (S # L))) from O to outDTag(eval(E, (S # L))) 
+  fi .
+
+*** Reduce sync. call  to async. call with reply 
+eq
+ < O : C | Att: S, Pr: (L, (E . M(EL ;; AL)); SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+= 
+if eval(E, (S # L)) =/= O then
+ < O : C | Att: S, Pr: (L, (! E . M(EL)); (fid(O,N) ?(AL)); SL), PrQ: W,  Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK > 
+else
+< O : C | Att: S, Pr: (L, (! E . M(EL)); (N ?(AL)); SL), PrQ: W,  Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >  fi .
+
+eq
+< O : C | Att: S, Pr: (L, (Q(EL ;; AL)); SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+= 
+  < O : C | Att: S, Pr: (L, (! 'this . Q(EL)); (N ?(AL)); SL), PrQ: W,  Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >   .
+
+eq
+ < O : C | Att: S, Pr: (L,(Q @ C(EL ;; AL) ); SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+= 
+   < O : C | Att: S, Pr: (L, (! Q @ C(EL)); (N ?(AL)); SL), PrQ: W,  Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >   .
+
+
+*** emit reply message ***Futures
+rl [return] :
+< O : C |  Att: S, Pr: (L, (return(EL)); SL), PrQ: W, Lcnt: N, Lvl: Lev >
+=>
+if  eval('caller, L) =/= O then
+< O : C |  Att: S, Pr: (L, SL), PrQ: W, Lcnt: N, Lvl: Lev > 
+comp(evalFid('label, L),evalList(EL, (S # L))) from O to evalFid('label, L)***fid(eval('caller, L),evalN('label, L))
+else
+< O : C |  Att: S, Pr: (L, SL), PrQ: W, Lcnt: N, Lvl: Lev > 
+comp(evalN('label, L),evalList(EL, (S # L))) from O to eval('caller, L) fi .
+ 
+***eval('caller, L) .
+
+*****flowsensitivity
+rl [return] :
+< O : C |  Att: S, Pr: (L, (return(EL)); SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+=>
+if  eval('caller, L) =/= O then
+< O : C |  Att: S, Pr: (L, SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK > 
+comp(evalFid('label, L),evalList(EL, (S # L))) from O to evalFid('label, L)***fid(eval('caller, L),evalN('label, L))
+else
+< O : C |  Att: S, Pr: (L, SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK > 
+comp(evalN('label, L),evalList(EL, (S # L))) from O to eval('caller, L) fi .
+
+
+
+
+****resolving a future
+***rl [resolving-future] :
+***fut( fid ( O , N ) , null )
+op checkDN : DataG -> Bool .
+eq checkDN (D)    = true .
+eq checkDN (DFid) = false .
+ 
+*** Optimization: reduce label to value only once
+eq < O : C |  Att: S, Pr: (L, (Q ?(AL)); SL), PrQ: W, Lcnt: N, Lvl: Lev > 
+= if (checkDN(eval(Q,(S # L)))) then
+ < O : C |  Att: S, Pr: (L, (evalN(eval(Q,(S # L)),(S # L)) ?(AL)); SL), PrQ: W, Lcnt: N, Lvl: Lev >
+else
+ < O : C |  Att: S, Pr: (L, (evalFid(eval(Q,(S # L)),(S # L)) ?(AL)); SL), PrQ: W, Lcnt: N, Lvl: Lev >
+fi .
+
+**********flowsensitivity
+eq < O : C |  Att: S, Pr: (L, (Q ?(AL)); SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK > 
+= if (checkDN(eval(Q,(S # L)))) then
+ < O : C |  Att: S, Pr: (L, (evalN(eval(Q,(S # L)),(S # L)) ?(AL)); SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+else
+ < O : C |  Att: S, Pr: (L, (evalFid(eval(Q,(S # L)),(S # L)) ?(AL)); SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+fi .
+
+
+
+
+*** blocking reply sentence ***
+eq ***rl [block-sync-reply] :
+< O : C |  Att: S, Pr: (L, (N ?(AL)); SL), PrQ: W, Lcnt: F, Lvl: Lev > 
+< O : Qu | Dealloc: NS, Ev: MM + comp(N, DL) >
+= 
+< O : C |  Att: S, Pr: (L, (AL ::= DL); SL), PrQ: W, Lcnt: F, Lvl: Lev > 
+< O : Qu | Dealloc: NS, Ev: MM > .
+
+ceq ***rl [block-sync-reply future] :
+fut(Fidd,DL)
+< O : C |  Att: S, Pr: (L, (Fidd ?(AL)); SL), PrQ: W, Lcnt: F, Lvl: Lev >
+= 
+fut(Fidd,DL) 
+< O : C |  Att: S, Pr: (L, (AL ::= outDTag(DL)); SL), PrQ: W, Lcnt: F, Lvl: Lev >
+if DL =/= undef and (outTag(DL) <= Lev)  .
+
+crl [ask-from-wrappedfuture] :
+<< Wr: Fidd, Lvl: Lev', Lvlqu: S | fut(Fidd, DL) >>
+< O : C |  Att: S, Pr: (L, (Fidd ?(AL)); SL), PrQ: W, Lcnt: F, Lvl: Lev >
+=>
+if (Lev' <= Lev) then
+<< Wr: Fidd, Lvl: Lev', Lvlqu: S | fut(Fidd, DL) >>
+< O : C |  Att: S, Pr: (L, (AL ::= outDTag(DL)); SL), PrQ: W, Lcnt: F, Lvl: Lev > 
+else
+<< Wr: Fidd, Lvl: Lev', Lvlqu: S | fut(Fidd, DL) >>
+error(Fidd) fi 
+if DL =/= undef . 
+
+
+
+*******flowsensitivity
+eq ***rl [block-sync-reply] :
+< O : C |  Att: S, Pr: (L, (N ?(AL)); SL), PrQ: W, Lcnt: F, Lvl: Lev, Flowsen: on, PCstk: PCSTK > 
+< O : Qu | Dealloc: NS, Ev: MM + comp(N, DL) >
+= 
+< O : C |  Att: S, Pr: (L, (AL ::= DL); SL), PrQ: W, Lcnt: F, Lvl: Lev, Flowsen: on, PCstk: PCSTK > 
+< O : Qu | Dealloc: NS, Ev: MM > .
+
+rl [ask-for-future] :
+< O : C |  Att: S, Pr: (L, (Fidd ?(AL)); SL), PrQ: W, Lcnt: F, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+=> 
+< O : C |  Att: S, Pr: (L, (Fidd ??(AL)); SL), PrQ: W, Lcnt: F, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+askfut(O, Fidd) . 
+
+rl [ask-for-future-out-wrapper] :
+<< Wr: O, Lvl: Lev, Lvlqu: S | askfut(O, Fidd) Config >>
+=>
+<< Wr: O, Lvl: Lev, Lvlqu: S | Config >> askfut(O, Fidd) .
+
+crl [ask-from-future] :
+fut(Fidd,DL)
+askfut(O, Fidd)
+=>
+sendfut(O, Fidd, DL) 
+if DL =/= undef .
+
+crl [ask-from-wrappedfuture] :
+<< Wr: Fidd, Lvl: Lev, Lvlqu: S | fut(Fidd, DL) >>
+askfut(O, Fidd)
+=>
+<< Wr: Fidd, Lvl: Lev, Lvlqu: S | fut(Fidd, DL) >>
+getlev(Fidd, O)
+if DL =/= undef .
+
+rl [ask-for-future-out-wrapper] :
+<< Wr: O, Lvl: Lev, Lvlqu: S | Config >> getlev(Fidd, O)
+=>
+<< Wr: O, Lvl: Lev, Lvlqu: S | Config >> (sendlev(Fidd, O, Lev))  .
+
+rl [ask-for-future-out-wrapper] :
+getlev(Fidd, O')
+< O' : C |  Att: S, Pr: (L, SL), PrQ: W, Lcnt: F, Lvl: Lev >
+=>
+< O' : C |  Att: S, Pr: (L, SL), PrQ: W, Lcnt: F, Lvl: Lev >
+sendlev(Fidd, O', Lev)  .
+
+crl [ask-from-wrappedfuture] :
+<< Wr: Fidd, Lvl: Lev, Lvlqu: S | fut(Fidd, DL) >>
+sendlev(Fidd, O', Lev')
+=>
+if (Lev <= Lev') then
+<< Wr: Fidd, Lvl: Lev, Lvlqu: S | fut(Fidd, DL) >>
+sendfut(O', Fidd, DL) 
+else
+<< Wr: Fidd, Lvl: Lev, Lvlqu: S | fut(Fidd, DL) >>
+error(Fidd) fi 
+if DL =/= undef .
+
+rl [wrapper-getfut-msg] :
+sendfut(O, Fidd, DL) 
+<< Wr: O, Lvl: Lev, Lvlqu: S | Config >>
+=>
+<< Wr: O, Lvl: Lev, Lvlqu: S | sendfut(O, Fidd, DL)  Config >> .
+
+rl [get-future-value] :
+sendfut(O, Fidd, D) 
+< O : C |  Att: S, Pr: (L, (Fidd ??(AL)); SL), PrQ: W, Lcnt: F, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+=>
+< O : C |  Att: S, Pr: (L, (AL ::= D); SL), PrQ: W, Lcnt: F, Lvl: Lev, Flowsen: on, PCstk: PCSTK >  .
+
+rl [get-future-value] :
+sendfut(O, Fidd, DL) 
+< O : C |  Att: S, Pr: (L, (Fidd ?(AL)); SL), PrQ: W, Lcnt: F, Lvl: Lev >
+=>
+< O : C |  Att: S, Pr: (L, (AL ::= DL); SL), PrQ: W, Lcnt: F, Lvl: Lev >  .
+
+*** We may here get (emp ::= emp), which should be reduced to skip .
+
+*** Transport rule: include new message in queue
+crl [invoc-msg-wrapper-out-bla] :
+<< Wr: O, Lvl: Lev, Lvlqu: S' | (invoc(O, Fidd, M, DL) from O to O') Config >>
+=>
+if ((join(outTagList(DL))) <= S'[[ O' ]] ) then
+<< Wr: O, Lvl: Lev, Lvlqu: S' | Config >> (invoc(O, Fidd, M, DL) from O to O') 
+else
+error(DL, O, O')
+<< Wr: O, Lvl: Lev, Lvlqu: S' | Config >> 
+fi 
+if (inlevqu(O', S') == true) .
+
+crl [invoc-msg-wrapper-out] :
+<< Wr: O, Lvl: Lev, Lvlqu: S' | (invoc(O, Fidd, M, DL) from O to O') Config >>
+=>
+<< Wr: O, Lvl: Lev, Lvlqu: S' | (invoc(O, Fidd, M, DL) from O) Config >>
+getlev(O, O')
+if (inlevqu(O', S') == false) .
+
+rl [get-obj-level] :
+getlev(O, O')
+<< Wr: O', Lvl: Lev, Lvlqu: S | Config >>
+=>
+<< Wr: O', Lvl: Lev, Lvlqu: S | Config >>
+sendlev(O, O', Lev) .
+
+rl [get-obj-level] :
+getlev(O, O')
+< O' : C |  Att: S, Pr: P, PrQ: W, Lcnt: F, Lvl: Lev >
+=>
+< O' : C |  Att: S, Pr: P, PrQ: W, Lcnt: F, Lvl: Lev >
+sendlev(O, O', Lev)  .
+
+rl[add-obj-level] :
+<< Wr: O, Lvl: Lev, Lvlqu: S | (InvocBody from O) Config >> sendlev(O, O', Lev')
+=>
+<< Wr: O, Lvl: Lev, Lvlqu: (S, (O' |-> Lev')) | (InvocBody from O to O') Config >> .
+
+
+rl [invoc-msg] :
+< O : Qu | Dealloc: NS, Ev: MM > (MsgBody from O to O)
+=>
+< O : Qu | Dealloc: NS, Ev: MM + MsgBody > .
+
+*****+ (invoc(O', Fidd, M , DL))
+***** < O : Qu | Dealloc: NS, Ev: MM >
+rl [invoc-msg-wrapper-inshouldbecorrected] :
+<< Wr: O, Lvl: Lev, Lvlqu: S' |  Config >> (invoc(O', Fidd, M , DL) from O' to O)
+=>
+<< Wr: O, Lvl: Lev, Lvlqu: S' | getClass( M, Fidd) Config >>  (checkinvoc(O', Fidd, M , DL) from O' to O)  .
+
+rl [get-className] :
+getClass(M, Fidd)
+< O : C | Att: S, Pr: P, PrQ: W, Lcnt: F, Lvl: Lev, Flowsen: on, PCstk: PCSTK > 
+=>
+< O : C | Att: S, Pr: P, PrQ: W, Lcnt: F, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+classPar(M, C < emp >, Fidd) .
+
+rl [invoc-msg-wrapper-inshouldbecorrected] :
+<< Wr: O, Lvl: Lev, Lvlqu: S' | classPar(M, C < emp >, Fidd)  Config >> 
+=>
+<< Wr: O, Lvl: Lev, Lvlqu: S' |  Config >> classPar(M, C < emp >, Fidd)   .
+
+rl [invoc-msg-wrapper-checking] :
+<< Wr: O, Lvl: Lev, Lvlqu: S | < O : Qu | Dealloc: NS, Ev: MM > Config >> sendActPar(AL, Fidd) (checkinvoc(O', Fidd, M , DL) from O' to O)
+=>
+if (outTagList(DL) <= outTagList(AL)) then
+<< Wr: O, Lvl: Lev, Lvlqu: S | < O : Qu | Dealloc: NS, Ev: MM + (invoc(O', Fidd, M , DL)) > Config >>
+else
+error(M)
+<< Wr: O, Lvl: Lev, Lvlqu: S | < O : Qu | Dealloc: NS, Ev: MM > Config >> 
+ fi .
+
+***Future resolving
+rl [comp-wrapper] :
+<< Wr: O', Lvl: Lev, Lvlqu: S | (comp(Fidd, DL) from O' to Fidd) Config >>
+=>
+<< Wr: O', Lvl: Lev, Lvlqu: S | Config >>  (comp(Fidd, DL) from O' to Fidd) .
+
+rl [comp-wrapper] :
+<< Wr: O', Lvl: Lev, Lvlqu: S | (comp(Fidd, emp) from O' to Fidd) Config >>
+=>
+<< Wr: O', Lvl: Lev, Lvlqu: S | Config >>  (comp(Fidd, emp) from O' to Fidd) .
+
+
+rl [future-out-wrapper] :
+<< Wr: O', Lvl: Lev, Lvlqu: S | fut(Fidd, undef) Config >>
+=>
+<< Wr: O', Lvl: Lev, Lvlqu: S | Config >>
+fut(Fidd, undef) .
+
+
+rl [future-resolving] :
+fut(Fidd, undef)
+(comp(Fidd, DL) from O' to Fidd)
+=>
+if outTag(DL) == h then
+<< Wr: Fidd, Lvl: outTag(DL), Lvlqu: noSub | fut(Fidd, DL) >>
+else
+fut(Fidd, DL) fi .
+
+
+*** generalize to lists of labels AL:
+
+rl [free] :
+< O : C | Att: S, Pr: (L, free(A) ; SL), PrQ: W, Lcnt: N, Lvl: Lev >
+< O : Qu | Dealloc: NS, Ev: MM >
+=>
+< O : C | Att: S, Pr: (L, free(eval(A,(S # L))); SL), PrQ: W, Lcnt: N, Lvl: Lev > 
+< O : Qu | Dealloc: NS, Ev: MM > .
+
+
+rl [free] :
+< O : C | Att: S, Pr: (L, free(D) ; SL), PrQ: W, Lcnt: N, Lvl: Lev >
+< O : Qu | Dealloc: NS, Ev: MM >
+=>
+< O : C | Att: S, Pr: (L,SL), PrQ: W, Lcnt: N, Lvl: Lev > 
+< O : Qu | Dealloc: (evalN(D, (S # L)); NS), Ev: MM > .
+
+crl [free] :
+< O : C | Att: S, Pr: (L, free(DFid) ; SL), PrQ: W, Lcnt: N, Lvl: Lev >
+< O : Qu | Dealloc: NS, Ev: MM + comp(Fidd, DL) >
+=>
+< O : C | Att: S, Pr: (L,SL), PrQ: W, Lcnt: N, Lvl: Lev > 
+< O : Qu | Dealloc: NS, Ev: MM >
+if evalFid(DFid, (S # L)) == Fidd .
+
+******flowsensitivity
+rl [free] :
+< O : C | Att: S, Pr: (L, free(A) ; SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+< O : Qu | Dealloc: NS, Ev: MM >
+=>
+< O : C | Att: S, Pr: (L, free(outDTag(eval(A,(S # L)))); SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK > 
+< O : Qu | Dealloc: NS, Ev: MM > .
+
+
+rl [free] :
+< O : C | Att: S, Pr: (L, free(D) ; SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+< O : Qu | Dealloc: NS, Ev: MM >
+=>
+< O : C | Att: S, Pr: (L,SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK > 
+< O : Qu | Dealloc: (evalN(D, (S # L)); NS), Ev: MM > .
+
+crl [free] :
+< O : C | Att: S, Pr: (L, free(DFid) ; SL), PrQ: W, Lcnt: N, Lvl: Lev, Flowsen: on, PCstk: PCSTK >
+< O : Qu | Dealloc: NS, Ev: MM + comp(Fidd, DL) >
+=>
+< O : C | Att: S, Pr: (L,SL), PrQ: W, Lcnt: N, Lvl: Lev , Flowsen: on, PCstk: PCSTK > 
+< O : Qu | Dealloc: NS, Ev: MM >
+if evalFid(DFid, (S # L)) == Fidd .
+
+*** Deallocate
+eq < O : Qu | Dealloc: (N ; NS), Ev: comp(N, DL) + MM >
+=  < O : Qu | Dealloc: NS, Ev: MM > .
+
+
+endm
+eof

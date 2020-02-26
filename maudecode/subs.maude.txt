@@ -1,0 +1,71 @@
+fmod STORE is
+protecting DATA .
+sorts Marker Binding Subst BindingTag SubsTag SubsG .
+subsorts Marker  Binding  < Subst  .
+***subsorts   BindingTag  < SubsTag  . 
+***subsorts Subst SubsTag < SubsG .
+
+op noSub : -> Subst [ctor] .
+***op noSubTag : -> SubsTag [ctor] .  
+op _,_ : Subst Subst  -> Subst [ctor assoc id: noSub prec 121 format (d r os d)] .
+op _|->_ : Aid DataGT -> Binding [ctor] .
+op _|->_ : Aid Tag -> Binding [ctor] .
+op _|->_ : Oid Tag -> Binding [ctor] .
+op endscope :  -> Marker [ctor] .
+***op pop : Subst -> Subst .
+***op push : Subst -> Subst .
+op pop : Subst -> Subst .
+op push : Subst -> Subst .
+op first :  Subst Aid -> DataGT .  *** look from left
+*** op has : Aid Subst -> Bool .
+op _[_] : Subst Aid -> DataGT .
+op _[[_]] : Subst Oid -> Tag . **** returning security tag of objects
+op insert : Aid DataGT Subst -> Subst .
+***op insertTag : Aid DataG Subst -> Subst .
+op insertTag : Aid Tag Subst -> Subst .
+op insertTag : Aid DataG Subst -> Subst .
+***op insertTag : Aid Data Subst -> Subst .
+
+var S : Subst . vars A A' : AidGT . vars D D' : Data .  vars DGT DGT' : DataGT .
+vars T T' : Tag . var ST : SubsTag . var SG : SubsG .
+vars DD' DD : DataTag . vars DG DG' : DataG . vars  O' O : Oid .
+
+eq  (S,(A |-> DGT)) [ A ] = DGT .
+ceq (S,(A' |-> DGT)) [ A ] = S [ A ] if A =/= A' .
+eq  (S,(O |-> T)) [[ O ]] = T .
+ceq (S,(O' |-> T)) [[ O ]] = S [[ O ]] if O =/= O' .
+***eq  (SG,(A |-> DD)) [ A ]] = DD .
+***ceq (SG,(A' |-> DD)) [ A ] = SG [ A ] if A =/= A' .
+eq  (S,endscope)   [ A ] = first(S,A) . *** S [ A ]  
+
+eq pop((S,(A |-> DGT))) = pop(S) .
+eq pop((S,endscope)) = S .
+eq push(S)= (S,endscope) .
+eq insert(A,DGT,noSub) = (A |-> DGT) .
+eq insert(A,DGT,(S,(A |-> DGT'))) = (S,(A |-> DGT)) .
+ceq insert(A,DGT,(S,(A' |-> DGT'))) = (insert(A,DGT,S),(A' |-> DGT'))  if A =/= A' .
+eq insert(A,DGT,(S,endscope)) = (insert(A,DGT,S),endscope) .
+eq  first(((A  |-> DGT),S) ,A) = DGT .
+ceq first(((A' |-> DGT),S) ,A) = first(S,A) if A =/= A' .
+eq  first((endscope,S) ,A) = undef . *** should not happen in a welltyped prog
+
+*****flow-sensitivity
+eq insertTag(A, T ,noSub) = (A |-> T) .
+eq insertTag(A, DD ,noSub) = (A |-> DD) .
+eq insertTag(A, D ,noSub) = (A |-> D l) .
+eq insertTag(A, D ,(S,(A |-> DGT ))) = (S,(A |-> D l) ) .
+eq insertTag(A, DD ,(S,(A |-> DGT ))) = (S,(A |-> DD)) .
+ceq insertTag(A, D ,(S,(A' |-> DGT))) = (insertTag(A,D ,S),(A' |-> DGT))  if A =/= A' .
+ceq insertTag(A, DD ,(S,(A' |-> DGT))) = (insertTag(A,DD ,S),(A' |-> DGT))  if A =/= A' .
+***eq pop((S,(A |-> DD))) = pop(S) .
+***eq pop((S,endscope)) = S .
+***eq push(S)= (ST,endscope) .
+
+***eq  first(((A  |-> DD),ST) ,A) = DD  .
+***ceq first(((A' |-> DD),ST) ,A) = first(ST,A) if A =/= A' .
+***eq  first((endscope,ST) ,A) = undef . *** should not happen in a welltyped prog
+
+
+*** red (S, (A |-> D ))[A] .
+*** red (S, (A |-> D), (A' |-> D'))[A] .
+endfm
